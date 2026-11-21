@@ -423,7 +423,7 @@
       case 'connect': A.setTool('drop'); draw = { fat: a.dataset.id, a: { t: 'n', id: a.dataset.id }, pts: [] }; hint(); render(); break;
       case 'newcable': { A.setTool('cable:' + a.dataset.kind); draw = { a: { t: 'n', id: a.dataset.id }, pts: [] }; hint(); render(); break; }
       case 'paint': { const c = FT.cable(s0.id); c.color = a.dataset.hex; A.commit(); break; }
-      case 'reroute': { const c = FT.cable(s0.id), p1 = FT.endPos(c.a), p2 = FT.endPos(c.b); c.pts = FT.route(p1, p2); A.commit(); break; }
+      case 'reroute': { const c = FT.cable(s0.id); if (c.kind === 'drop' && c.a.t === 'n' && c.b.t === 'b') c.pts = FT.dropRoute(FT.node(c.a.id), FT.bld(c.b.id)); else c.pts = FT.route(FT.endPos(c.a), FT.endPos(c.b)); A.commit(); break; }
       case 'straight': { FT.cable(s0.id).pts = []; A.commit(); break; }
       case 'swap': { const c = FT.cable(s0.id); if (c.a.t === 'n' && c.b.t === 'n') { const x = c.a; c.a = c.b; c.b = x; c.pts.reverse(); A.commit(); } break; }
       case 'dup': { const n = FT.node(s0.id), m = FT.addNode(n.type, n.x + 14, n.y + 14, { color: n.color }); Object.assign(m.props, JSON.parse(JSON.stringify(n.props))); sel = [{ t: 'n', id: m.id }]; A.commit(); break; }

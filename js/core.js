@@ -152,7 +152,30 @@
     if (ref.t === 'n') { const n = FT.node(ref.id); return n ? [n.x, n.y] : null; }
     const b = FT.bld(ref.id); return b ? FT.centre(b) : null;
   };
-  FT.cablePts = function (c) { const a = FT.endPos(c.a), b = FT.endPos(c.b); if (!a || !b) return null; return [a].concat(c.pts || [], [b]); };
+  FT.bldEdgePoint = function (b, from) {   // nearest point on the house outline to 'from'
+    const x = Math.max(b.x1, Math.min(b.x2, from[0])), y = Math.max(b.y1, Math.min(b.y2, from[1]));
+    if (x !== from[0] || y !== from[1]) return [x, y];
+    const d = [[from[0] - b.x1, [b.x1, from[1]]], [b.x2 - from[0], [b.x2, from[1]]], [from[1] - b.y1, [from[0], b.y1]], [b.y2 - from[1], [from[0], b.y2]]].sort((p, q) => p[0] - q[0]); return d[0][1];
+  };
+  FT.cablePts = function (c) {
+    const a = FT.endPos(c.a); if (!a || !c.b) return null; const mid = c.pts || []; let b;
+    if (c.b.t === 'b') { const bl = FT.bld(c.b.id); if (!bl) return null; b = FT.bldEdgePoint(bl, mid.length ? mid[mid.length - 1] : a); } else b = FT.endPos(c.b);
+    if (!b) return null; return [a].concat(mid, [b]);
+  };
+  /* drop route: along the streets from the terminal to the street point nearest the house, then a short leg to the house wall */
+  FT.dropRoute = function (fat, b) {
+    const cen = FT.centre(b), bl = FT.state.buildings; let best = null;
+    const crossings = (p, q) => { let n = 0; for (let i = 0; i < bl.length; i++) { const o = bl[i]; if (o.id === b.id) continue; if (Math.max(o.x1, o.x2) < Math.min(p[0], q[0]) || Math.min(o.x1, o.x2) > Math.max(p[0], q[0]) || Math.max(o.y1, o.y2) < Math.min(p[1], q[1]) || Math.min(o.y1, o.y2) > Math.max(p[1], q[1])) continue;
+        const L = FT.dist(p, q), k = Math.max(2, Math.ceil(L / 2)); let hit = false; for (let s = 1; s < k && !hit; s++) { const x = p[0] + (q[0] - p[0]) * s / k, y = p[1] + (q[1] - p[1]) * s / k; if (x > o.x1 && x < o.x2 && y > o.y1 && y < o.y2) hit = true; } if (hit) n++; } return n; };
+    FT.graph.V.forEach(v => { const d = FT.dist(v.p, cen); if (d > 140) return; const e = FT.bldEdgePoint(b, v.p), leg = FT.dist(v.p, e), sc = leg + 250 * crossings(v.p, e); if (!best || sc < best.sc) best = { sc, p: v.p }; });
+    if (!best) { const q = FT.nearOnStreets(cen); if (!q) return []; best = { p: q.pt }; }
+    const pts = FT.route([fat.x, fat.y], best.p), last = pts.length ? pts[pts.length - 1] : [fat.x, fat.y];
+    if (FT.dist(last, best.p) > 1.5) pts.push([Math.round(best.p[0] * 10) / 10, Math.round(best.p[1] * 10) / 10]); return pts;
+  };
+  FT.rerouteDrops = function () {
+    FT.state.cables.forEach(c => { if (c.kind === 'drop' && c.a && c.a.t === 'n' && c.b && c.b.t === 'b') { const n = FT.node(c.a.id), b = FT.bld(c.b.id); if (n && b) c.pts = FT.dropRoute(n, b); } });
+    FT.invalidate();
+  };
   FT.endLoop = function (ref) { const s = FT.state.settings.loops; if (!ref) return 0; if (ref.t === 'b') return s.b || 0; const n = FT.node(ref.id); return n ? (s[n.type] || 0) : 0; };
   FT.cableLen = function (c) {
     const pts = FT.cablePts(c), sc = FT.state.settings.scale; if (!pts) return { geo: 0, slack: 0, loops: 0, total: 0 };
@@ -313,7 +336,7 @@
   FT.assign = function (bldId, fatId, keepCable) {
     const b = FT.bld(bldId), n = FT.node(fatId); if (!b || !n) return null;
     let dc = FT.state.cables.find(c => c.kind === 'drop' && c.b && c.b.t === 'b' && c.b.id === bldId);
-    if (dc) { dc.a = { t: 'n', id: fatId }; if (!keepCable) dc.pts = []; } else dc = FT.addCable('drop', { t: 'n', id: fatId }, { t: 'b', id: bldId }, []);
+    if (dc) { dc.a = { t: 'n', id: fatId }; if (!keepCable) dc.pts = FT.dropRoute(n, b); } else dc = FT.addCable('drop', { t: 'n', id: fatId }, { t: 'b', id: bldId }, FT.dropRoute(n, b));
     dc.color = FT.zoneColor(n); b.fat = fatId; b.port = FT.nextPort(fatId); if (b.status === 'planned') b.status = 'passed'; FT.invalidate(); return dc;
   };
   FT.zoneColor = function (n) { // colour of the FDH zone a node belongs to
@@ -322,7 +345,7 @@
 
   /* ------------------------------------------------------------------ demo network for the surveyed area */
   FT.newProject = function () {
-    const st = FT.state = { v: 1, meta: FT.defaultMeta(), settings: FT.defaultSettings(), counters: {}, nodes: [], cables: [], buildings: [], notes: [] };
+    const st = FT.state = { v: 2, meta: FT.defaultMeta(), settings: FT.defaultSettings(), counters: {}, nodes: [], cables: [], buildings: [], notes: [] };
     S0.buildings.forEach(b => st.buildings.push({ id: b[0], block: b[1], x1: b[2], y1: b[3], x2: b[4], y2: b[5], name: '', units: 1, floors: 1, status: 'planned', fat: null, port: '', plan: '', ont: { model: '', serial: '' }, contact: '', notes: '' }));
     FT.invalidate(); return st;
   };
@@ -349,9 +372,14 @@
         const near = FT.nearOnStreets(cent[ci]), pos = near ? near.pt : cent[ci];
         const fat = FT.addNode('fat', pos[0], pos[1], { name: 'FAT-' + String(gi + 1) + String.fromCharCode(65 + fats.length) }); fat.color = fdh.color; fats.push(fat);
         const dcab = FT.addCable('distribution', { t: 'n', id: fdh.id }, { t: 'n', id: fat.id }, FT.route([fdh.x, fdh.y], [fat.x, fat.y]), { name: 'DC-' + (gi + 1) + String.fromCharCode(65 + fats.length - 1), color: fdh.color, fibres: 12 });
-        mem.sort((a, b) => FT.centre(a)[0] - FT.centre(b)[0]).forEach(b => FT.assign(b.id, fat.id));
       }
     });
+    // connect every house to the terminal that is cheapest to reach along the streets (capacity 8 per terminal), then drop empty terminals
+    { const fats = st.nodes.filter(n => n.type === 'fat'), GDf = fats.map(f => FT.graphDist(FT.nearestVertex([f.x, f.y]))), pairs = [];
+      st.buildings.forEach(b => { const cen = FT.centre(b), q = FT.nearOnStreets(cen), v = FT.nearestVertex(q.pt), off = q.d; fats.forEach((f, i) => pairs.push([GDf[i][v] + off, b.id, i])); });
+      pairs.sort((x, y) => x[0] - y[0]); const load = fats.map(() => 0), done = new Set();
+      pairs.forEach(([cost, bid, i]) => { if (done.has(bid) || load[i] >= 8) return; done.add(bid); load[i]++; FT.assign(bid, fats[i].id); });
+      fats.forEach((f, i) => { if (!load[i]) FT.deleteNode(f.id); }); }
     FD.forEach((f, i) => { const D = FT.derive(); const need = D.cableUsed ? 0 : 0; const rt = FT.route([co.x, co.y], [f.x, f.y]); FT.addCable('feeder', { t: 'n', id: co.id }, { t: 'n', id: f.id }, rt, { name: 'FC-0' + (i + 1), fibres: 12, color: '#ff4d4d' }); });
     // size feeders from the demand (twice the used fibres, standard counts, minimum 12)
     FT.invalidate(); const D = FT.derive(); st.cables.filter(c => c.kind === 'feeder').forEach(c => { const u = D.cableUsed[c.id] || 1; c.fibres = FT.FIBRE_COUNTS.find(x => x >= Math.max(12, u * 2)) || 288; });
@@ -370,6 +398,6 @@
   FT.load = function (obj) {
     const base = FT.defaultSettings(), s = Object.assign({}, base, obj.settings || {}); s.loops = Object.assign({}, base.loops, (obj.settings || {}).loops); s.prefixes = Object.assign({}, base.prefixes, (obj.settings || {}).prefixes);
     s.prices = Object.assign({}, base.prices, (obj.settings || {}).prices); s.splitterLoss = Object.assign({}, base.splitterLoss, (obj.settings || {}).splitterLoss); s.geo = Object.assign({}, base.geo, (obj.settings || {}).geo);
-    FT.state = Object.assign({ v: 1, meta: FT.defaultMeta(), counters: {}, nodes: [], cables: [], buildings: [], notes: [] }, obj, { settings: s }); if (!FT.state.geoRef) FT.state.geoRef = [(FT.BOUNDS.x0 + FT.BOUNDS.x1) / 2, (FT.BOUNDS.y0 + FT.BOUNDS.y1) / 2]; FT.invalidate();
+    FT.state = Object.assign({ v: 1, meta: FT.defaultMeta(), counters: {}, nodes: [], cables: [], buildings: [], notes: [] }, obj, { settings: s }); const old = (obj.v || 1) < 2; FT.state.v = 2; if (old) FT.rerouteDrops(); if (!FT.state.geoRef) FT.state.geoRef = [(FT.BOUNDS.x0 + FT.BOUNDS.x1) / 2, (FT.BOUNDS.y0 + FT.BOUNDS.y1) / 2]; FT.invalidate();
   };
 })();
