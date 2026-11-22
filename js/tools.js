@@ -21,7 +21,7 @@
   T.setTool = function (t, opt) {
     if (FT.store && FT.store.mode === 'view' && !['select', 'area', 'measure', 'shape', 'dxfarea'].includes(t)) { U().toast(FT.t('ro_msg')); return; }
     if (T.tool === t && t !== 'select') t = 'select';
-    T.cancel(true); T.tool = t; T.opt = opt || null; T.draw = null;
+    T.draw = null; T.tool = t; T.opt = opt || null; // keep the selection (needed by Connect subscriber)
     map.getCanvas().style.cursor = t === 'select' ? '' : 'crosshair';
     FT.map.setDraw([]); U().meter(null); U().toolChanged();
   };
@@ -261,6 +261,7 @@
     T.draw = null; U().hint(''); FT.changed('reconnect'); U().toast(FT.t('toast_saved'));
   }
   function subClick(e, p) {
+    const pick = nodeNear(e.point, 22); if (pick && pick.ratio) { T.sel = { kind: 'node', id: pick.id }; FT.map.setSelection('node', pick.id); U().selectionChanged(); U().hint(pick.name + ' ' + pick.ratio + ' → ' + (FT.lang === 'ar' ? 'انقر على بيت لربطه' : 'click a building to connect')); return; }
     const b = FT.map.buildingAt(p), S = FT.state, box = T.sel && T.sel.kind === 'node' ? S.nodes[T.sel.id] : null;
     if (!box || !box.ratio) { U().toast('Select a SK / DK / BK with a splitter ratio first'); return; }
     if (!b) { U().toast('Click a building'); return; }

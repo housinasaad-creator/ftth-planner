@@ -35,7 +35,7 @@
     localStorage.setItem(CACHE(c.id), JSON.stringify(st)); localStorage.setItem('ft2_last', c.id); return c.id;
   };
   S.open = async function (id, keyOverride) {
-    const e = reg().find(x => x.id === id), key = keyOverride || (e && e.key); if (!key) return false;
+    const e = reg().find(x => x.id === id), owned = e && e.key && e.key !== 'local' && (e.mode || 'edit') === 'edit', key = (owned ? e.key : keyOverride) || (e && e.key); if (!key) return false;
     let st = null, mode = 'edit', name = e ? e.name : '', type = e ? e.type : 'gpon';
     let resync = false;
     try { const r = await rpc('ftth_get_project', { p_id: id, p_key: key }); if (r) { st = r.state; mode = r.mode; name = r.name; type = r.type; S.online = true; const lt = +localStorage.getItem('ft2_t_' + id) || 0, cache = jget(CACHE(id), null); if (cache && mode === 'edit' && lt > (Date.parse(r.updated_at) || 0) + 1500) { st = cache; resync = true; } } else if (!keyOverride) { upsertReg({ id, gone: 1 }); } } catch (x) { S.online = false; st = jget(CACHE(id), null); }

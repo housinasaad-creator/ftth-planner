@@ -77,6 +77,21 @@
     m.querySelector('#mX').onclick = UI.closeModal; m.onmousedown = e => { if (e.target === m) UI.closeModal(); }; if (wire) wire(m.querySelector('.db'));
   };
   UI.closeModal = () => { const m = $('#modal'); m.classList.remove('on'); m.innerHTML = ''; };
+  UI.ask = function (title, value, label) {
+    return new Promise(res => {
+      const m = $('#modal2'); m.innerHTML = '<div class="dlg"><div class="dh"><span>' + esc(title) + '</span></div><div class="db"><input id="askIn" value="' + esc(value || '') + '"></div><div class="df"><button class="btn" id="askNo">' + t('cancel') + '</button><button class="btn pri" id="askOk">' + esc(label || t('ok')) + '</button></div></div>'; m.classList.add('on');
+      const inp = m.querySelector('#askIn'), done = v => { m.classList.remove('on'); m.innerHTML = ''; res(v); };
+      m.querySelector('#askOk').onclick = () => done(inp.value.trim() || null); m.querySelector('#askNo').onclick = () => done(null);
+      inp.onkeydown = e => { if (e.key === 'Enter') done(inp.value.trim() || null); else if (e.key === 'Escape') done(null); e.stopPropagation(); }; setTimeout(() => { inp.focus(); inp.select(); }, 30);
+    });
+  };
+  UI.confirmBox = function (msg, danger) {
+    return new Promise(res => {
+      const m = $('#modal2'); m.innerHTML = '<div class="dlg"><div class="db" style="font-size:15px;padding:22px 18px">' + esc(msg) + '</div><div class="df"><button class="btn" id="cfNo">' + t('cancel') + '</button><button class="btn ' + (danger ? 'bad' : 'pri') + '" id="cfOk">' + t('ok') + '</button></div></div>'; m.classList.add('on');
+      const done = v => { m.classList.remove('on'); m.innerHTML = ''; res(v); };
+      m.querySelector('#cfOk').onclick = () => done(true); m.querySelector('#cfNo').onclick = () => done(false); m.querySelector('#cfOk').focus();
+    });
+  };
   UI.closeCtx = () => { $('#ctx').style.display = 'none'; };
   UI.ctxMenu = function (x, y, h, p) {
     const c = $('#ctx'), items = [];
@@ -130,11 +145,11 @@
     el.querySelectorAll('[data-impdel]').forEach(b => b.onclick = e => { e.stopPropagation(); FT.commit(); delete FT.state.imports[b.dataset.impdel]; FT.changed('import'); });
     el.querySelectorAll('[data-imp]').forEach(r => r.ondblclick = () => { const g = FT.state.imports[r.dataset.imp]; if (g) FT.map.fitBBox(FT.bboxOf([].concat(...g.features.slice(0, 2000).map(f => f.geometry.type === 'Point' ? [f.geometry.coordinates] : f.geometry.type === 'LineString' ? f.geometry.coordinates : f.geometry.coordinates[0])))); });
     el.querySelectorAll('[data-drop]').forEach(f => { f.ondragover = e => e.preventDefault(); f.ondrop = e => { e.preventDefault(); const key = e.dataTransfer.getData('text'); if (!key) return; FT.commit(); (S.fmap = S.fmap || {})[key] = f.dataset.drop; FT.changed('folder'); }; });
-    el.querySelectorAll('[data-act=fren]').forEach(b => b.onclick = e => { e.stopPropagation(); const f = S.folders[b.dataset.fid]; const n = prompt(t('new_folder'), f.name); if (n) { FT.commit(); f.name = n; FT.changed('folder'); } });
+    el.querySelectorAll('[data-act=fren]').forEach(b => b.onclick = async e => { e.stopPropagation(); const f = S.folders[b.dataset.fid]; const n = await UI.ask(t('new_folder'), f.name); if (n) { FT.commit(); f.name = n; FT.changed('folder'); } });
     el.querySelectorAll('[data-act=fdel]').forEach(b => b.onclick = e => { e.stopPropagation(); FT.commit(); const fid = b.dataset.fid; delete S.folders[fid]; Object.keys(S.fmap || {}).forEach(k => S.fmap[k] === fid && delete S.fmap[k]); FT.changed('folder'); });
   };
   function importsGroup() { const im = Object.values(FT.state.imports || {}); if (!im.length) return ''; const open = !collapsed.has('imports'); return '<div class="tr fold" data-fold="imports"><span class="tw">' + (open ? '▾' : '▸') + '</span><span class="nm">' + t('imports') + '</span><span class="ct">' + im.length + '</span></div>' + (open ? im.map(g => '<div class="tr" data-imp="' + g.id + '" style="padding-inline-start:30px"><input type="checkbox" ' + (T().hidden.has(g.id) ? '' : 'checked') + ' data-impvis="' + g.id + '"><span class="dot" style="background:#7ad7ff"></span><span class="nm">' + esc(g.name) + '</span><span class="ct">' + g.features.length + '</span><span class="acts"><button data-impdel="' + g.id + '">🗑</button></span></div>').join('') : ''); }
-  UI.newFolder = function () { const n = prompt(t('new_folder'), t('new_folder')); if (!n) return; FT.commit(); const S = FT.state; (S.folders = S.folders || {})[FT.uid('f')] = { name: n }; FT.changed('folder'); };
+  UI.newFolder = async function () { const n = await UI.ask(t('new_folder'), t('new_folder')); if (!n) return; FT.commit(); const S = FT.state; (S.folders = S.folders || {})[FT.uid('f')] = { name: n }; FT.changed('folder'); };
 
   // ---------------- right panel ----------------
   UI.tab = k => { rtab = k; $$('.tabs button[data-tab]').forEach(b => b.classList.toggle('on', b.dataset.tab === k)); UI.renderPanel(); };
@@ -231,7 +246,7 @@
   function budgetHtml() {
     const S = FT.state, olts = Object.values(S.nodes).filter(n => n.type === 'olt'), subs = Object.values(S.subs); if (!subs.length || !olts.length) return '<p class="d">OLT + subscriber → budget</p>';
     const B = FT.BASE_LOSS; let h = '<table class="t"><tr><th>SUB</th><th>km</th><th>dB</th><th>Rx</th></tr>';
-    subs.slice(0, 40).forEach(sub => { let best = null; olts.forEach(o => { const r = T().route(o.id, sub.node); if (r && (!best || r.len < best.len)) best = Object.assign({ olt: o }, r); }); if (!best) { h += '<tr><td>' + esc(sub.name) + '</td><td colspan="3">—</td></tr>'; return; } let loss = best.len / 1000 * B.fiber1490 + 2 * B.connector + best.nodes.length * B.splice; best.nodes.forEach(id => { const n = S.nodes[id]; if (n && n.ratio) loss += FT.SPLITTER_LOSS[n.ratio] || 0; }); const rx = B.txDbm - loss; h += '<tr><td>' + esc(sub.name) + '</td><td>' + (best.len / 1000).toFixed(2) + '</td><td>' + loss.toFixed(1) + '</td><td style="color:' + (rx > B.rxSens + 3 ? 'var(--ok)' : rx > B.rxSens ? 'var(--warn)' : 'var(--bad)') + '">' + rx.toFixed(1) + ' dBm</td></tr>'; });
+    subs.slice(0, 40).forEach(sub => { let best = null; olts.forEach(o => { const r = T().route(o.id, sub.node); if (r && (!best || r.len < best.len)) best = Object.assign({ olt: o }, r); }); if (!best) { h += '<tr><td>' + esc(sub.name) + '</td><td colspan="3" style="color:var(--warn)">' + (FT.lang === 'ar' ? 'غير موصول بكبل من OLT' : 'no cable path from the OLT') + '</td></tr>'; return; } let loss = best.len / 1000 * B.fiber1490 + 2 * B.connector + best.nodes.length * B.splice; best.nodes.forEach(id => { const n = S.nodes[id]; if (n && n.ratio) loss += FT.SPLITTER_LOSS[n.ratio] || 0; }); const rx = B.txDbm - loss; h += '<tr><td>' + esc(sub.name) + '</td><td>' + (best.len / 1000).toFixed(2) + '</td><td>' + loss.toFixed(1) + '</td><td style="color:' + (rx > B.rxSens + 3 ? 'var(--ok)' : rx > B.rxSens ? 'var(--warn)' : 'var(--bad)') + '">' + rx.toFixed(1) + ' dBm</td></tr>'; });
     return h + '</table>';
   }
   UI.shapeForAnalysis = function (tool, ring) { if (tool === 'plan') { const n = FT.map.buildingsInRing(ring).length; UI.modal(t('t_plan'), '<div class="kv"><span>' + t('buildings') + '</span><b>' + n + '</b></div><div class="kv"><span>km²</span><b>' + (FT.ringArea(ring) / 1e6).toFixed(3) + '</b></div><div class="kv"><span>≈ OLT ports (1:32 split, 1 per 32 homes)</span><b>' + Math.ceil(n / 32) + '</b></div><div class="kv"><span>≈ BK (1:8)</span><b>' + Math.ceil(n / 8) + '</b></div><div class="kv"><span>≈ DK (1:4)</span><b>' + Math.ceil(n / 32) + '</b></div>', [{ label: t('close') }]); T().setTool('select'); } else { T().setTool('select'); FT.design.open(ring); } };
@@ -272,7 +287,7 @@
       root.querySelector('#ioSave').onclick = () => FT.exp.saveJson(); root.querySelector('#ioGeo').onclick = () => FT.exp.geojson(); root.querySelector('#ioKmz').onclick = () => FT.exp.kmz();
       root.querySelector('#ioLoad').onclick = () => { root.querySelector('#ioFile').dataset.mode = 'project'; root.querySelector('#ioFile').click(); }; root.querySelector('#ioImp').onclick = () => { root.querySelector('#ioFile').dataset.mode = 'import'; root.querySelector('#ioFile').click(); };
       root.querySelector('#ioFile').onchange = async e => { const f = e.target.files[0]; if (!f) return; await FT.imp.file(f, root.querySelector('#ioCrs').value); UI.closeModal(); };
-      root.querySelector('#ioReset').onclick = () => { if (confirm(t('io_confirm'))) { FT.commit(); FT.setState(Object.assign(FT.blank(), { meta: FT.state.meta })); UI.closeModal(); } };
+      root.querySelector('#ioReset').onclick = async () => { if (await UI.confirmBox(t('io_confirm'), true)) { FT.commit(); FT.setState(Object.assign(FT.blank(), { meta: FT.state.meta })); UI.closeModal(); } };
     });
   };
   UI.openHelp = function () {
@@ -286,10 +301,10 @@
       (list.length ? '<table class="t">' + list.sort((a, b) => (b.updated || 0) - (a.updated || 0)).map(p => '<tr><td><a href="#" data-open="' + p.id + '" style="color:var(--hot2);font-weight:700">' + esc(p.name || 'Project') + '</a></td><td><span class="badge">' + esc((p.type || 'gpon').toUpperCase()) + '</span>' + (p.mode === 'view' ? '<span class="badge">VIEW</span>' : '') + (p.offline ? '<span class="badge">OFFLINE</span>' : '') + '</td><td style="direction:ltr;color:var(--mu)">' + (p.updated ? new Date(p.updated).toLocaleDateString() : '') + '</td><td><button class="ib sm" data-ren="' + p.id + '">✎</button><button class="ib sm" data-del="' + p.id + '">🗑</button></td></tr>').join('') + '</table>' : '<p class="d">—</p>') +
       '<div class="f" style="margin-top:14px"><label>' + t('open_by_link') + '</label><div style="display:flex;gap:6px"><input id="prLink" placeholder="https://…?p=…&k=…"><button class="btn" id="prGo">' + t('open') + '</button></div></div>';
     UI.modal(t('projects'), body, first ? [] : [{ label: t('close') }], root => {
-      root.querySelectorAll('[data-new]').forEach(b => b.onclick = () => { const n = prompt(t('new_project'), 'Homs ' + (list.length + 1)); if (!n) return; UI.openPrices({ start: true, name: n, type: b.dataset.new }); });
+      root.querySelectorAll('[data-new]').forEach(b => b.onclick = () => UI.openPrices({ start: true, name: 'Homs ' + (list.length + 1), type: b.dataset.new }));
       root.querySelectorAll('[data-open]').forEach(a => a.onclick = async e => { e.preventDefault(); if (await FT.store.open(a.dataset.open)) { UI.closeModal(); UI.afterProject(); } else UI.toast('Cannot open this project'); });
-      root.querySelectorAll('[data-ren]').forEach(b => b.onclick = async () => { const n = prompt(t('projects'), ''); if (!n) return; if (!FT.store.cur || FT.store.cur.id !== b.dataset.ren) await FT.store.open(b.dataset.ren); FT.store.rename(n); UI.closeModal(); UI.afterProject(); UI.openProjects(); });
-      root.querySelectorAll('[data-del]').forEach(b => b.onclick = async () => { if (!confirm(t('menu_delete') + '?')) return; await FT.store.remove(b.dataset.del); UI.closeModal(); UI.openProjects(!FT.store.cur); });
+      root.querySelectorAll('[data-ren]').forEach(b => b.onclick = async () => { const n = await UI.ask(t('rename'), (list.find(x => x.id === b.dataset.ren) || {}).name || ''); if (!n) return; if (!FT.store.cur || FT.store.cur.id !== b.dataset.ren) await FT.store.open(b.dataset.ren); FT.store.rename(n); UI.closeModal(); UI.afterProject(); UI.openProjects(); });
+      root.querySelectorAll('[data-del]').forEach(b => b.onclick = async () => { if (!(await UI.confirmBox(t('delete_q'), true))) return; await FT.store.remove(b.dataset.del); UI.closeModal(); UI.openProjects(!FT.store.cur); });
       root.querySelector('#prGo').onclick = async () => { try { const u = new URL(root.querySelector('#prLink').value.trim()), id = u.searchParams.get('p'), k = u.searchParams.get('k'); if (id && k && await FT.store.open(id, k)) { UI.closeModal(); UI.afterProject(); } else UI.toast('Invalid link'); } catch (e) { UI.toast('Invalid link'); } };
     });
     if (first) $('#modal').onmousedown = null;
@@ -298,7 +313,7 @@
     o = o || {}; const P = FT.prices(), ar = FT.lang === 'ar', wl = (o.type || (FT.state.meta && FT.state.meta.type)) !== 'gpon', fb = (o.type || (FT.state.meta && FT.state.meta.type)) !== 'wireless';
     const row = (path, label, val) => '<tr><td class="n">' + esc(label) + '</td><td><input data-price="' + path + '" type="text" inputmode="decimal" value="' + val + '"></td></tr>';
     const sec = (title, rows) => '<h4>' + esc(title) + '</h4><table class="t ptable">' + rows + '</table>';
-    let h = '<p class="d">' + t('price_hint') + '</p>';
+    let h = (o.start ? '<div class="f"><label>' + t('proj_name') + '</label><input id="prName" value="' + esc(o.name) + '"></div>' : '') + '<p class="d">' + t('price_hint') + '</p>';
     if (fb) {
       h += sec(t('cat_cables'), FT.CABLE_CAT.map(c => row('cable.' + c.id, c.name.split(' loose')[0].split(' G.')[0], P.cable[c.id])).join(''));
       h += sec(t('cat_pipes'), FT.PIPE_CAT.map(c => row('pipe.' + c.id, c.name, P.pipe[c.id])).join(''));
@@ -308,11 +323,11 @@
     }
     if (wl) h += sec(t('cat_wireless'), [['ap', 'AP (sector)'], ['cpe', 'CPE'], ['ptp', 'PTP radio']].map(([k, l]) => row('wdev.' + k, l, P.wdev[k])).join(''));
     h += sec(t('cat_labour'), row('labour.pipe_m', ar ? 'تركيب الأنابيب' : 'Pipe installation', P.labour.pipe_m) + row('labour.cable_m', ar ? 'تركيب الكبلات' : 'Cable installation', P.labour.cable_m));
-    UI.modal((o.start ? o.name + ' — ' : '') + t('prices_title'), h, [o.start ? { label: t('close'), fn: () => UI.openProjects(!FT.store.cur) } : { label: t('close') }].concat(o.start ? [{ label: t('skip_prices'), fn: async () => { await FT.store.create(o.name, o.type); UI.afterProject(); } }] : []).concat([{ label: o.start ? t('start_project') : t('save_prices'), cls: 'pri', fn: async () => {
+    UI.modal((o.start ? t('new_project') + ' — ' : '') + t('prices_title'), h, [o.start ? { label: t('close'), fn: () => UI.openProjects(!FT.store.cur) } : { label: t('close') }].concat(o.start ? [{ label: t('skip_prices'), fn: async () => { await FT.store.create(($('#prName') && $('#prName').value.trim()) || o.name, o.type); UI.afterProject(); } }] : []).concat([{ label: o.start ? t('start_project') : t('save_prices'), cls: 'pri', fn: async () => {
       const num = v => { v = parseFloat(String(v).replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d)).replace(',', '.')); return isNaN(v) || v < 0 ? 0 : v; }, out = {};
       $$('[data-price]').forEach(i => { const path = i.dataset.price.split('.'); if (path.length === 1) out[path[0]] = num(i.value); else { (out[path[0]] = out[path[0]] || {})[path[1]] = num(i.value); } });
       const merged = Object.assign({}, FT.state.prices || {}, out); Object.keys(out).forEach(k => { if (typeof out[k] === 'object') merged[k] = Object.assign({}, (FT.state.prices || {})[k] || {}, out[k]); });
-      if (o.start) { await FT.store.create(o.name, o.type); FT.state.prices = merged; await FT.store.saveNow(); UI.afterProject(); } else { FT.commit(); FT.state.prices = merged; FT.changed('prices'); UI.toast(t('toast_saved')); }
+      if (o.start) { await FT.store.create(($('#prName') && $('#prName').value.trim()) || o.name, o.type); FT.state.prices = merged; await FT.store.saveNow(); UI.afterProject(); } else { FT.commit(); FT.state.prices = merged; FT.changed('prices'); UI.toast(t('toast_saved')); }
     } }]));
   };
   UI.openShare = function () {
@@ -361,7 +376,7 @@
     $('#bUndo').onclick = () => FT.undo(); $('#bRedo').onclick = () => FT.redo(); $('#bHelp').onclick = UI.openHelp; $('#bLang').onclick = () => { FT.setLang(FT.lang === 'ar' ? 'en' : 'ar'); UI.applyLang(); UI.buildTabs((FT.state.meta && FT.state.meta.type) || 'gpon'); UI.buildToolbar(); };
     $('#bShare').onclick = UI.openShare; $('#bPrices').onclick = () => UI.openPrices(); $('#bUser').onclick = () => UI.toast('Sign-in — after Supabase connection');
     $('#bLayersX').onclick = UI.toggleLeft; $('#bRightX').onclick = UI.toggleRight; $('#bLay').onclick = UI.toggleLeft; $('#bPan').onclick = UI.toggleRight;
-    $('#bNewFolder').onclick = UI.newFolder; $('#bCollapse').onclick = () => { collapsed = new Set(['root', 'nodes', 'pipes', 'cables', 'splices', ...Object.keys(FT.state.folders || {})]); UI.refreshTree(); };
+    $('#bNewFolder').onclick = UI.newFolder; $('#bCollapse').onclick = () => { collapsed = collapsed.has('root') ? new Set() : new Set(['root', 'nodes', 'pipes', 'cables', 'splices', 'imports', ...Object.keys(FT.state.folders || {})]); UI.refreshTree(); };
     $('#bLockAll').onclick = () => { Object.keys(FT.state.nodes).forEach(i => T().locked.add(i)); UI.refreshTree(); };
     $('#lsearch').oninput = e => { treeQuery = e.target.value; UI.refreshTree(); };
     $('#bCross').onclick = () => { const c = $('#cross'); c.style.display = c.style.display === 'block' ? 'none' : 'block'; $('#bCross').classList.toggle('on'); };

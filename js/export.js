@@ -16,6 +16,7 @@
     const a = X.area, S = FT.state;
     if (a.mode === 'view') { const b = FT.map.map.getBounds(); return rectRing([b.getWest(), b.getSouth(), b.getEast(), b.getNorth()]); }
     if (a.mode === 'draw') return a.ring;
+    if (a.mode !== 'all') return null; // nothing chosen yet
     const b = netBBox(); if (!b) return null; const pad = 0.0006; return rectRing([b[0] - pad, b[1] - pad, b[2] + pad, b[3] + pad]);
   }
   X.collect = async function (ring, opt) {
@@ -59,12 +60,24 @@
   };
 
   // roads for the "drawing + map" option (OpenStreetMap via Overpass, only for the chosen area)
+  X.OVERPASS = ['https://overpass-api.de/api/interpreter', 'https://overpass.kumi.systems/api/interpreter', 'https://overpass.private.coffee/api/interpreter'];
   X.fetchRoads = async function (bb) {
-    const q = '[out:json][timeout:60];way["highway"](' + bb[1] + ',' + bb[0] + ',' + bb[3] + ',' + bb[2] + ');out geom;';
-    const r = await fetch('https://overpass-api.de/api/interpreter', { method: 'POST', body: 'data=' + encodeURIComponent(q) });
-    if (!r.ok) throw new Error('overpass ' + r.status);
-    const j = await r.json();
-    return (j.elements || []).filter(e => e.geometry && e.geometry.length > 1).map(e => ({ pts: e.geometry.map(p => [p.lon, p.lat]), name: (e.tags && (e.tags['name:ar'] || e.tags.name)) || '', hw: e.tags && e.tags.highway }));
+    const q = '[out:json][timeout:40];way["highway"](' + bb[1] + ',' + bb[0] + ',' + bb[3] + ',' + bb[2] + ');out geom;';
+    for (const url of X.OVERPASS) {
+      const ac = new AbortController(), tm = setTimeout(() => ac.abort(), 15000);
+      try {
+        const r = await fetch(url, { method: 'POST', body: 'data=' + encodeURIComponent(q), signal: ac.signal }); if (!r.ok) continue;
+        const j = await r.json(); return { source: 'osm', roads: (j.elements || []).filter(e => e.geometry && e.geometry.length > 1).map(e => ({ pts: e.geometry.map(p => [p.lon, p.lat]), name: (e.tags && (e.tags['name:ar'] || e.tags.name)) || '', hw: e.tags && e.tags.highway })) };
+      } catch (err) { /* try the next mirror */ } finally { clearTimeout(tm); }
+    }
+    // all mirrors down: use the road lines of the map tiles already loaded (same OpenStreetMap data, limited to what the map has drawn)
+    const out = [], seen = new Set();
+    (FT.map.map.querySourceFeatures('openmaptiles', { sourceLayer: 'transportation' }) || []).forEach(f => {
+      if (!f.geometry || f.properties.class === 'rail' || f.properties.class === 'ferry') return;
+      const lines = f.geometry.type === 'LineString' ? [f.geometry.coordinates] : f.geometry.type === 'MultiLineString' ? f.geometry.coordinates : [];
+      lines.forEach(c => { if (c.length < 2) return; const key = c[0].join(',') + '|' + c[c.length - 1].join(','); if (seen.has(key)) return; seen.add(key); out.push({ pts: c, name: f.properties['name:ar'] || f.properties.name || '', hw: f.properties.class }); });
+    });
+    return { source: 'tiles', roads: out };
   };
 
   X.openDxf = function () {
@@ -106,7 +119,7 @@
       const btn = document.getElementById('dxGo'), old = btn.textContent; btn.disabled = true; btn.textContent = '...';
       try {
         const withMap = st.content === 'map', d = await X.collect(ring, { bld: withMap && st.bld, nums: st.nums });
-        if (withMap && st.roads) { try { d.roads = (await X.fetchRoads(FT.bboxOf(ring))).filter(r => r.pts.some(p => FT.pointInRing(p, ring))); } catch (e) { U().toast('Roads unavailable (offline?) - exported without roads'); d.roads = []; } }
+        if (withMap && st.roads) { try { const rr = await X.fetchRoads(FT.bboxOf(ring)); d.roads = rr.roads.filter(r => r.pts.some(p => FT.pointInRing(p, ring))); if (rr.source === 'tiles') U().toast(FT.lang === 'ar' ? 'خدمة الطرق مشغولة — صُدّرت الطرق الظاهرة على الخريطة فقط' : 'Roads service busy — exported the roads currently loaded on the map'); } catch (e) { U().toast('Roads unavailable - exported without roads'); d.roads = []; } }
         if (!(d.nodes.length + d.pipes.length + d.cables.length + (d.blds || []).length + (d.roads || []).length)) { U().toast(t('dxf_none')); return; }
         const dxf = X.buildDxf(d, ring, Object.assign({}, st, { bld: withMap && st.bld })); download('ftth_homs_' + stamp() + '.dxf', dxf, 'application/dxf'); U().toast(t('toast_saved'));
       } finally { btn.disabled = false; btn.textContent = old; }

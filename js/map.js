@@ -47,6 +47,7 @@
       maxBounds: [[bb[0] - pad, bb[1] - pad], [bb[2] + pad, bb[3] + pad]], attributionControl: false, preserveDrawingBuffer: true, localIdeographFontFamily: false,
       dragRotate: true, pitchWithRotate: true, maxPitch: 75, doubleClickZoom: false,
     });
+    map.boxZoom.disable(); // Shift+click is used by the planner (multi-select / remove number)
     map.addControl(new maplibregl.AttributionControl({ compact: true, customAttribution: 'Buildings © Microsoft (ODbL) · Map data © OpenStreetMap contributors · OpenFreeMap' }), 'bottom-right');
     map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), 'bottom-right');
     map.addControl(new maplibregl.ScaleControl({ unit: 'metric' }), 'bottom-left');

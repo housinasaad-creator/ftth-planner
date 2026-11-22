@@ -89,3 +89,7 @@ body.nop #modal{background:#07090d88}
 .ptable td.n{width:34%;direction:ltr}.ptable input{padding:5px 8px;text-align:end;direction:ltr}.ptable h4{margin:14px 0 4px;color:var(--hot2)}
 
 .dlg .df{position:sticky;bottom:0;background:var(--p1);z-index:2}
+
+#modal2{position:fixed;inset:0;display:none;place-items:center;background:#000b;z-index:80}#modal2.on{display:grid}#modal2 .dlg{width:min(460px,92vw)}
+
+#modal2{position:fixed;inset:0;display:none;place-items:center;background:#000b;z-index:80}#modal2.on{display:grid}#modal2 .dlg{width:min(460px,92vw)}
