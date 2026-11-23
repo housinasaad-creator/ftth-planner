@@ -61,6 +61,7 @@
     }
     if (cb) return { kind: 'cable', id: cb.properties.id }; if (pp) return { kind: 'pipe', id: pp.properties.id };
     const bl = pick('bld-3d'); if (bl) return { kind: 'bld', id: bl.properties.id };
+    if (FT.map.bldHiddenNow()) { const bid = FT.map.buildingAt(ll(e)); if (bid) return { kind: 'bld', id: bid }; }
     return null;
   }
   T.hit = hit;
@@ -144,6 +145,7 @@
   function onMove(e) {
     const d = T.draw; T.hoverNode = null;
     if (dragging) return dragMove(e);
+    if (FT.map.bldHiddenNow()) FT.map.hover(ll(e));
     if (!d) { if (T.tool === 'select') { const h = hit(e); map.getCanvas().style.cursor = h ? 'pointer' : ''; } if (T.tool === 'pipe' || T.tool === 'cable' || T.tool === 'route' || T.tool === 'reconnect' || T.tool === 'splice') { const n = nodeNear(e.point, 18); map.getCanvas().style.cursor = n ? 'cell' : 'crosshair'; } return; }
     const p = ll(e); let cur = p;
     if (d.kind === 'pipe' || d.kind === 'cable') { const n = nodeNear(e.point, 18); if (n) { cur = n.ll; T.hoverNode = n; } }

@@ -72,6 +72,11 @@
     map.addLayer({ id: 'bld-num', type: 'symbol', source: 'bld', minzoom: 15.5, filter: ['>', ['get', 'num'], 0],
       layout: { 'text-field': ['get', 'lab'], 'text-font': ['Noto Sans Bold'], 'text-size': ['interpolate', ['linear'], ['zoom'], 15.5, 10, 19, 18], 'text-allow-overlap': true, 'text-pitch-alignment': 'viewport' },
       paint: { 'text-color': '#07090d', 'text-halo-color': '#fff6ee', 'text-halo-width': 2 } });
+    // hide-the-drawing mode (satellite only): buildings invisible but still live (hover outline, click, numbers)
+    map.addSource('hov', { type: 'geojson', data: EMPTY });
+    map.addLayer({ id: 'bld-out', type: 'line', source: 'bld', minzoom: 15, layout: { visibility: 'none' }, filter: ['any', ['>', ['get', 'num'], 0], ['==', ['get', 'st'], 1], ['==', ['get', 'sel'], 1]], paint: { 'line-color': '#ff8a62', 'line-width': 1.4, 'line-opacity': 0.9 } });
+    map.addLayer({ id: 'hov-fill', type: 'fill', source: 'hov', paint: { 'fill-color': '#ff6a3d', 'fill-opacity': 0.22 } });
+    map.addLayer({ id: 'hov-line', type: 'line', source: 'hov', paint: { 'line-color': '#ff6a3d', 'line-width': 2.2 } });
     // network
     ['pipes', 'cables', 'nodes', 'draw', 'sel', 'wd', 'wl', 'imp'].forEach(s => map.addSource(s, { type: 'geojson', data: EMPTY, promoteId: 'id' }));
     map.addLayer({ id: 'pipes-case', type: 'line', source: 'pipes', paint: { 'line-color': '#07090d', 'line-width': ['interpolate', ['linear'], ['zoom'], 10, 3, 18, 8], 'line-opacity': 0.55 } });
@@ -99,12 +104,24 @@
   M.firstBaseLayerAbove = () => { const l = map.getStyle().layers.find(x => x.type === 'line' || x.type === 'symbol'); return l && l.id; };
 
   // ---------------- basemap switch ----------------
+  M.hideBld = false; let hovId = null; // hideBld = user wish; it only takes effect on the satellite basemap
+  M.bldHiddenNow = () => M.hideBld && M.base === 'sat';
+  M.applyBldHidden = function () {
+    const v = M.bldHiddenNow(); map.setPaintProperty('bld-3d', 'fill-extrusion-opacity', v ? 0 : 0.94); map.setLayoutProperty('bld-out', 'visibility', v ? 'visible' : 'none');
+    if (!v) { hovId = null; map.getSource('hov').setData(EMPTY); }
+  };
+  M.setBldHidden = function (v) { M.hideBld = !!v; M.applyBldHidden(); };
+  M.hover = function (ll) {
+    if (!M.bldHiddenNow()) return; const id = M.buildingAt(ll); if (id === hovId) return; hovId = id;
+    map.getSource('hov').setData(id ? { type: 'FeatureCollection', features: [{ type: 'Feature', properties: {}, geometry: { type: 'Polygon', coordinates: [M.buildingRing(id)] } }] } : EMPTY);
+    map.getCanvas().style.cursor = id ? 'pointer' : '';
+  };
   M.setBase = function (kind) {
     map.setLayoutProperty('sat', 'visibility', kind === 'sat' ? 'visible' : 'none');
     const vis = kind === 'sat' ? 'none' : 'visible';
-    map.getStyle().layers.forEach(l => { if (l.id === 'sat' || /^(mask|gov-line|bld|pipes|cables|nodes|sel|draw)/.test(l.id)) return; if (l.type === 'background') return; if (l.type === 'symbol' && kind === 'sat') map.setLayoutProperty(l.id, 'visibility', 'visible'); else if (l.type !== 'symbol') map.setLayoutProperty(l.id, 'visibility', vis); });
+    map.getStyle().layers.forEach(l => { if (l.id === 'sat' || /^(mask|gov-line|bld|hov|pipes|cables|nodes|sel|draw)/.test(l.id)) return; if (l.type === 'background') return; if (l.type === 'symbol' && kind === 'sat') map.setLayoutProperty(l.id, 'visibility', 'visible'); else if (l.type !== 'symbol') map.setLayoutProperty(l.id, 'visibility', vis); });
     map.easeTo({ pitch: kind === '3d' ? 58 : 0, duration: 600 });
-    M.base = kind;
+    M.base = kind; M.applyBldHidden();
   };
 
   // ---------------- buildings (static z14 tiles built by tools/build_tiles.py) ----------------
