@@ -93,3 +93,5 @@ body.nop #modal{background:#07090d88}
 #modal2{position:fixed;inset:0;display:none;place-items:center;background:#000b;z-index:80}#modal2.on{display:grid}#modal2 .dlg{width:min(460px,92vw)}
 
 #modal2{position:fixed;inset:0;display:none;place-items:center;background:#000b;z-index:80}#modal2.on{display:grid}#modal2 .dlg{width:min(460px,92vw)}
+
+.edgeBtn{position:absolute;top:8px;z-index:6;background:#0e1117ee;color:#eceff6;border:1px solid #ff6a3d;border-radius:8px;padding:7px 12px;font:600 13px inherit;cursor:pointer}.edgeBtn:hover{background:#171b25}

@@ -101,8 +101,9 @@
     c.style.display = 'block'; c.style.left = Math.min(x, innerWidth - 190) + 'px'; c.style.top = Math.min(y, innerHeight - 40 * items.length) + 'px';
     setTimeout(() => document.addEventListener('mousedown', function f(e) { if (!c.contains(e.target)) { UI.closeCtx(); document.removeEventListener('mousedown', f); } }), 0);
   };
-  UI.toggleLeft = () => { const l = $('#left'); l.style.display = l.style.display === 'none' ? '' : 'none'; setTimeout(() => FT.map.map.resize(), 50); };
-  UI.toggleRight = () => { $('#right').classList.toggle('hide'); };
+  UI.edgeBtns = () => { const l = $('#left'), r = $('#right'), bl = $('#showLeft'), br = $('#showRight'); if (bl) bl.style.display = l.style.display === 'none' ? 'block' : 'none'; if (br) br.style.display = r.classList.contains('hide') ? 'block' : 'none'; };
+  UI.toggleLeft = () => { const l = $('#left'); l.style.display = l.style.display === 'none' ? '' : 'none'; setTimeout(() => FT.map.map.resize(), 50); UI.edgeBtns(); };
+  UI.toggleRight = () => { $('#right').classList.toggle('hide'); UI.edgeBtns(); };
   UI.fitAll = function () { const pts = []; Object.values(FT.state.nodes).forEach(n => pts.push(n.ll)); Object.values(FT.state.pipes).forEach(p => p.pts.forEach(q => pts.push(q))); if (pts.length > 1) FT.map.fitBBox(FT.bboxOf(pts)); else if (pts.length === 1) FT.map.flyTo(pts[0], 17); else FT.map.flyTo([36.7137, 34.7324], 14.5); };
   UI.zoomSel = function () { const s = T().sel, S = FT.state; if (!s) return; if (s.kind === 'node' && S.nodes[s.id]) FT.map.flyTo(S.nodes[s.id].ll, 18.5); else if (s.kind === 'pipe' && S.pipes[s.id]) FT.map.fitBBox(FT.bboxOf(S.pipes[s.id].pts)); else if (s.kind === 'cable' && S.cables[s.id]) FT.map.fitBBox(FT.bboxOf([].concat(...FT.cableSpans(S.cables[s.id]).map(x => x.pts)))); else if (s.kind === 'bld') { const r = FT.map.buildingRing(s.id) || (S.bld[s.id] && S.bld[s.id].fp); if (r) FT.map.flyTo(FT.centroid(r), 19); } };
   UI.hideSel = function () { const s = T().sel; if (!s) return; T().hidden.add(s.id); UI.applyHidden(); UI.refreshTree(); };
@@ -166,6 +167,7 @@
     if (tool === 'select' && !tbl) { body.innerHTML = '<p class="d">' + t('empty_panel') + '</p>'; return; }
     let h = '<h3>' + esc(tbl ? tbl.l : '') + '</h3><p class="d">' + esc(tbl ? tbl.d : '') + '</p>';
     if (['sk', 'dk', 'bk'].includes(tool)) h += field(t('ratio'), '<div class="seg" id="ratioSeg">' + FT.RATIOS.map(r => '<button data-r="' + r + '" class="' + (O.ratio[tool] === r ? 'on' : '') + '">' + (r || t('ratio_none')) + '</button>').join('') + '</div><div class="d" style="margin-top:5px">' + t('ratio_hint') + '</div>');
+    if (tool === 'pipe' || tool === 'cable') h += '<div class="fl"><input type="checkbox" id="roadSnap"' + (FT.roads.on ? ' checked' : '') + '><span>' + (FT.lang === 'ar' ? 'اتباع الشوارع تلقائيًا (لا يمرّ فوق البيوت)' : 'Follow streets automatically (never across buildings)') + '</span></div>';
     if (tool === 'pipe') h += field(t('pipe_type'), sel('pipeCat', FT.PIPE_CAT.map(p => [p.id, p.name]), O.pipeCat));
     if (tool === 'cable') { const groups = {}; FT.CABLE_CAT.forEach(c => (groups[c.group] = groups[c.group] || []).push(c)); h += field(t('cable_cat'), '<select id="cableCat">' + Object.entries(groups).map(([g, a]) => '<optgroup label="' + g + '">' + a.map(c => '<option value="' + c.id + '"' + (c.id === O.cableCat ? ' selected' : '') + '>' + esc(c.name) + '</option>').join('') + '</optgroup>').join('') + '</select>') + field(t('medium'), '<div class="seg" id="mediumSeg"><button data-m="free" class="' + (O.medium === 'free' ? 'on' : '') + '">' + t('m_free') + '</button><button data-m="aerial" class="' + (O.medium === 'aerial' ? 'on' : '') + '">' + t('m_aerial') + '</button></div>'); }
     if (tool === 'number') { const n = T().num; h += '<div class="seg" id="numMode" style="margin-bottom:10px"><button data-m="auto" class="' + (n.mode === 'auto' ? 'on' : '') + '">' + t('num_auto') + '</button><button data-m="click" class="' + (n.mode === 'click' ? 'on' : '') + '">' + t('num_click') + '</button></div><div class="two">' + field(t('num_prefix'), '<input id="numPfx" value="' + esc(n.prefix) + '">') + field(t('num_next'), '<input id="numNext" type="text" inputmode="numeric" value="' + n.next + '">') + '</div>' + (n.mode === 'auto' ? field(t('num_order'), sel('numOrder', [['walk', t('o_walk')], ['rows', t('o_rows')], ['street', t('o_street')]], n.order)) + '<p class="d">' + t('num_hint_auto') + '</p><button class="btn" id="numClear">' + t('num_clear') + '</button>' : '<p class="d">' + t('num_hint_click') + '</p>'); }
@@ -173,6 +175,7 @@
     if (tool !== 'select') h += keysBox([[t('place_here'), t('k_click')], [t('k_enter'), 'Enter'], [t('k_back'), '⌫'], [t('k_esc'), 'Esc']]);
     body.innerHTML = h;
     body.querySelectorAll('#ratioSeg button').forEach(b => b.onclick = () => { O.ratio[tool] = b.dataset.r; FT.state.ui.ratio[tool] = b.dataset.r; UI.renderPanel(); });
+    const rs = $('#roadSnap'); if (rs) rs.onchange = () => { FT.roads.on = rs.checked; };
     const pc = $('#pipeCat'); if (pc) pc.onchange = () => O.pipeCat = pc.value; const cc = $('#cableCat'); if (cc) cc.onchange = () => O.cableCat = cc.value;
     body.querySelectorAll('#mediumSeg button').forEach(b => b.onclick = () => { O.medium = b.dataset.m; UI.renderPanel(); });
     body.querySelectorAll('#numMode button').forEach(b => b.onclick = () => { T().num.mode = b.dataset.m; T().setTool('number'); });
@@ -375,7 +378,7 @@
     $('#brand').onclick = () => UI.openProjects(); $('#projName').onclick = () => UI.openProjects();
     $('#bUndo').onclick = () => FT.undo(); $('#bRedo').onclick = () => FT.redo(); $('#bHelp').onclick = UI.openHelp; $('#bLang').onclick = () => { FT.setLang(FT.lang === 'ar' ? 'en' : 'ar'); UI.applyLang(); UI.buildTabs((FT.state.meta && FT.state.meta.type) || 'gpon'); UI.buildToolbar(); };
     $('#bShare').onclick = UI.openShare; $('#bPrices').onclick = () => UI.openPrices(); $('#bUser').onclick = () => UI.toast('Sign-in — after Supabase connection');
-    $('#bLayersX').onclick = UI.toggleLeft; $('#bRightX').onclick = UI.toggleRight; $('#bLay').onclick = UI.toggleLeft; $('#bPan').onclick = UI.toggleRight;
+    $('#showLeft').onclick = UI.toggleLeft; $('#showRight').onclick = UI.toggleRight; $('#bLayersX').onclick = UI.toggleLeft; $('#bRightX').onclick = UI.toggleRight; $('#bLay').onclick = UI.toggleLeft; $('#bPan').onclick = UI.toggleRight;
     $('#bNewFolder').onclick = UI.newFolder; $('#bCollapse').onclick = () => { collapsed = collapsed.has('root') ? new Set() : new Set(['root', 'nodes', 'pipes', 'cables', 'splices', 'imports', ...Object.keys(FT.state.folders || {})]); UI.refreshTree(); };
     $('#bLockAll').onclick = () => { Object.keys(FT.state.nodes).forEach(i => T().locked.add(i)); UI.refreshTree(); };
     $('#lsearch').oninput = e => { treeQuery = e.target.value; UI.refreshTree(); };

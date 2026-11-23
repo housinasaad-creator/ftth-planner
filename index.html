@@ -26,7 +26,7 @@
       <div id="chips" class="chips"></div><div id="tree"></div>
       <div id="basemap"><div class="cap"></div><div class="bm"></div></div>
     </aside>
-    <section id="mapwrap"><div id="map"></div><div id="meter" class="meter"></div><div id="hint" class="hint"></div><div id="cross"></div></section>
+    <section id="mapwrap"><div id="map"></div><button id="showLeft" class="edgeBtn" style="display:none;left:8px" title="Ctrl+B">▤ الطبقات / Layers</button><button id="showRight" class="edgeBtn" style="display:none;right:56px" title="">▥ اللوحة / Panel</button><div id="meter" class="meter"></div><div id="hint" class="hint"></div><div id="cross"></div></section>
     <aside id="right"><div class="tabs"><button data-tab="tool"></button><button data-tab="props"></button><button data-tab="analysis"></button><span class="grow"></span><button id="bRightX" class="ib sm">✕</button></div><div id="rbody"></div></aside>
   </main>
   <footer id="status"><span id="stTool" class="chip hot"></span><span id="stKeys"></span><span class="grow"></span><span id="stMsg"></span><input id="cmd" placeholder="> help"><button id="bCross" class="ib sm">✛</button><button id="bNames" class="ib sm">Aa</button><button id="bLay" class="ib sm">▤</button><button id="bPan" class="ib sm">▥</button><span id="stZoom"></span><span id="stCoord"></span></footer>
@@ -46,7 +46,7 @@
 <script>(function(){var ua=navigator.userAgent||'';var phone=/Android|iPhone|iPad|iPod|Mobile|Windows Phone/i.test(ua)||(('ontouchstart' in window)&&Math.min(screen.width,screen.height)<700)||window.innerWidth<820&&('ontouchstart' in window);if(phone){document.body.classList.add('phone');document.getElementById('phoneBlock').classList.add('on');window.__PHONE=true;}})();</script>
 <script src="vendor/maplibre-gl.js"></script>
 <script src="js/i18n.js"></script><script src="js/model.js"></script><script src="js/dxf.js"></script>
-<script src="js/map.js"></script><script src="js/tools.js"></script><script src="js/numbering.js"></script><script src="js/wireless.js"></script><script src="js/design.js"></script><script src="js/import.js"></script>
+<script src="js/map.js"></script><script src="js/roads.js"></script><script src="js/tools.js"></script><script src="js/numbering.js"></script><script src="js/wireless.js"></script><script src="js/design.js"></script><script src="js/import.js"></script>
 <script src="js/export.js"></script><script src="js/config.js"></script><script src="js/store.js"></script><script src="js/ui.js"></script>
 <script>FT.boot();</script>
 </body></html>

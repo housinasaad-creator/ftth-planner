@@ -9,7 +9,7 @@
   const ll = e => [e.lngLat.lng, e.lngLat.lat];
 
   T.init = function () {
-    map = FT.map.map;
+    map = FT.map.map; FT.roads.init();
     map.on('click', onClick); map.on('mousemove', onMove); map.on('dblclick', onDbl); map.on('contextmenu', onCtx);
     map.on('mousedown', onDown); document.addEventListener('mouseup', onUp);
     map.on('mousemove', e => { const s = e.lngLat; U().coord(s.lat.toFixed(6) + ', ' + s.lng.toFixed(6)); });
@@ -112,7 +112,7 @@
       if (e.originalEvent.shiftKey && (h.kind === 'node' || h.kind === 'pipe' || h.kind === 'cable')) { T.toggleMulti(h); return; }
       T.select(h.kind, h.id); return;
     }
-    if (NODE_TOOLS[t]) { if (!guard(p)) return; FT.commit(); const n = FT.addNode(NODE_TOOLS[t], p); FT.changed('add'); T.select('node', n.id); T.tool = t; U().toolChanged(); U().toast(FT.t('toast_added') + ' · ' + n.name); return; }
+    if (NODE_TOOLS[t]) { if (!guard(p)) return; const sp = (t === 'mh' || t === 'pole' || t === 'sk' || t === 'dk' || t === 'bk' || t === 'olt') ? FT.roads.snapPoint(p, 18) : p; FT.commit(); const n = FT.addNode(NODE_TOOLS[t], sp); FT.changed('add'); T.select('node', n.id); T.tool = t; U().toolChanged(); U().toast(FT.t('toast_added') + ' · ' + n.name); return; }
     if (t === 'splice') { const n = nodeNear(e.point, 22); if (n) { U().openSplice(n.id, true); } return; }
     if (t === 'pipe' || t === 'cable') return lineClick(e, p, t);
     if (t === 'route') return routeClick(e);
@@ -129,6 +129,8 @@
     if (!T.draw) startDraw(t);
     const n = nodeNear(e.point, 18), q = n ? n.ll : p;
     if (!T.draw.pts.length && !n) { U().toast(FT.t('toast_node_end')); return; }
+    const last = T.draw.pts[T.draw.pts.length - 1];
+    if (last && n && FT.roads.on && FT.dist(last, q) > 12) { const rp = FT.roads.path(last, q); if (rp && FT.pathLen(rp) < FT.dist(last, q) * 3.2 + 60) { rp.slice(1, -1).forEach(v => addDrawPoint(v, null)); T.roadSnapped = true; } }
     if (addDrawPoint(q, n && n.id)) { preview(q); updateMeter(e.point, q); U().refreshStatus(); }
   }
   function updateMeter(pt, cur) {
