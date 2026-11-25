@@ -3,7 +3,7 @@
   'use strict';
   const FT = G.FT = G.FT || {};
   const T = FT.T = { tool: 'select', draw: null, sel: null, multi: null, num: { prefix: '', next: 1, order: 'walk', mode: 'click' }, shapeCB: null, cycle: 0, hidden: new Set(), locked: new Set() };
-  const NODE_TOOLS = { mh: 'mh', pole: 'pole', sk: 'sk', dk: 'dk', bk: 'bk', olt: 'olt' };
+  const NODE_TOOLS = { mh: 'mh', hh: 'hh', pole: 'pole', sk: 'sk', dk: 'dk', bk: 'bk', olt: 'olt' };
   let map, dragging = null;
   const U = () => FT.UI;
   const ll = e => [e.lngLat.lng, e.lngLat.lat];
@@ -15,7 +15,17 @@
     map.on('mousemove', e => { const s = e.lngLat; U().coord(s.lat.toFixed(6) + ', ' + s.lng.toFixed(6)); });
     map.on('zoom', () => U().zoom(map.getZoom()));
     document.addEventListener('keydown', onKey);
+    initMiddleRotate();
   };
+
+  // Middle mouse button (wheel pressed) + move = rotate the camera: horizontal = bearing (half the map width = 180°), vertical = tilt
+  function initMiddleRotate() {
+    const cv = map.getCanvasContainer(); let mid = null;
+    cv.addEventListener('mousedown', e => { if (e.button !== 1) return; e.preventDefault(); e.stopPropagation(); mid = { x: e.clientX, y: e.clientY, b: map.getBearing(), p: map.getPitch(), w: cv.clientWidth || 1000 }; cv.style.cursor = 'grabbing'; }, true);
+    cv.addEventListener('auxclick', e => { if (e.button === 1) e.preventDefault(); }, true);
+    document.addEventListener('mousemove', e => { if (!mid) return; const dx = e.clientX - mid.x, dy = e.clientY - mid.y; map.jumpTo({ bearing: mid.b + dx * 360 / mid.w, pitch: Math.max(0, Math.min(map.getMaxPitch ? map.getMaxPitch() : 75, mid.p - dy * 0.3)) }); });
+    document.addEventListener('mouseup', e => { if (e.button === 1 && mid) { mid = null; cv.style.cursor = ''; } });
+  }
 
   // ---------------- tool switching ----------------
   T.setTool = function (t, opt) {
@@ -33,11 +43,20 @@
   };
 
   // ---------------- selection ----------------
+  T.bsel = new Set(); // selected buildings (Shift+click adds)
+  T.clearBuildingSel = () => { T.bsel = new Set(); };
   T.select = function (kind, id) {
     T.sel = kind ? { kind, id } : null; if (kind) T.multi = null;
-    FT.map.setSelection(kind, id); if (kind !== 'bld') FT.map.setBuildingSelection(new Set(kind === 'bld' ? [id] : []));
-    if (kind === 'bld') FT.map.setBuildingSelection(new Set([id]));
+    if (kind === 'bld') T.bsel = new Set([id]); else T.bsel = new Set();
+    FT.map.setSelection(kind, id); FT.map.setBuildingSelection(new Set(T.bsel));
+    if (FT.bedit) FT.bedit.refresh(); if (kind && U().reveal) U().reveal(kind, id);
     U().selectionChanged(); U().refreshTree();
+  };
+  T.toggleBuilding = function (id) {
+    if (T.sel && T.sel.kind === 'bld' && !T.bsel.size) T.bsel.add(T.sel.id);
+    if (T.bsel.has(id)) T.bsel.delete(id); else T.bsel.add(id);
+    const last = T.bsel.has(id) ? id : [...T.bsel].pop(); T.multi = null; T.sel = last ? { kind: 'bld', id: last } : null;
+    FT.map.setSelection(null); FT.map.setBuildingSelection(new Set(T.bsel)); FT.bedit.refresh(); U().selectionChanged(); U().refreshTree();
   };
   T.selectMulti = function (m) { T.multi = m; T.sel = null; FT.map.setSelection(null); U().selectionChanged(); U().refreshTree(); };
 
@@ -75,6 +94,7 @@
   };
   T.deleteSelection = function () {
     if (FT.store && FT.store.mode === 'view') { U().toast(FT.t('ro_msg')); return; }
+    if ((T.sel && T.sel.kind === 'bld') || T.bsel.size) { FT.bedit.removeSelected(); return; }
     const S = FT.state; let did = false; FT.commit();
     if (T.sel) { const { kind, id } = T.sel; if (kind === 'node') FT.deleteNode(id); else if (kind === 'pipe') FT.deletePipe(id); else if (kind === 'cable') FT.deleteCable(id); else if (kind === 'splice') delete S.splices[id]; else if (kind === 'wdev') FT.wl.deleteDev(id); else if (kind === 'wlink') delete S.wlinks[id]; else if (kind === 'bld') { if (S.bld[id]) { delete S.bld[id].num; } } did = true; }
     else if (T.multi) { T.multi.nodes.forEach(i => FT.deleteNode(i)); T.multi.pipes.forEach(i => FT.deletePipe(i)); T.multi.cables.forEach(i => FT.deleteCable(i)); did = true; }
@@ -108,12 +128,16 @@
     if (dragging && dragging.moved) return;
     const p = ll(e), t = T.tool;
     if (t === 'select') {
+      const bx = [[e.point.x - 8, e.point.y - 8], [e.point.x + 8, e.point.y + 8]], lay = l => map.getLayer(l);
+      if (lay('impv-pt')) { const iv = map.queryRenderedFeatures(bx, { layers: ['impv-pt'] }); if (iv.length) { if (e.originalEvent.shiftKey) FT.imp.deleteVertex(iv[0].properties); return; } }
+      if (lay('bh-pt') && map.queryRenderedFeatures(bx, { layers: ['bh-pt', 'bh-vtx'] }).length) return; // a click on a handle never changes the selection
       const h = hit(e); T.cycle++;
       if (!h) { if (T.sel || T.multi) T.select(null); return; }
+      if (e.originalEvent.shiftKey && h.kind === 'bld') { T.toggleBuilding(h.id); return; }
       if (e.originalEvent.shiftKey && (h.kind === 'node' || h.kind === 'pipe' || h.kind === 'cable')) { T.toggleMulti(h); return; }
       T.select(h.kind, h.id); return;
     }
-    if (NODE_TOOLS[t]) { if (!guard(p)) return; const sp = (t === 'mh' || t === 'pole' || t === 'sk' || t === 'dk' || t === 'bk' || t === 'olt') ? FT.roads.snapPoint(p, 18) : p; FT.commit(); const n = FT.addNode(NODE_TOOLS[t], sp); FT.changed('add'); T.select('node', n.id); T.tool = t; U().toolChanged(); U().toast(FT.t('toast_added') + ' · ' + n.name); return; }
+    if (NODE_TOOLS[t]) { if (!guard(p)) return; const sp = FT.roads.snapPoint(p, 18); FT.commit(); const n = FT.addNode(NODE_TOOLS[t], sp); FT.changed('add'); T.select('node', n.id); T.tool = t; U().toolChanged(); U().toast(FT.t('toast_added') + ' · ' + n.name); return; }
     if (t === 'splice') { const n = nodeNear(e.point, 22); if (n) { U().openSplice(n.id, true); } return; }
     if (t === 'pipe' || t === 'cable') return lineClick(e, p, t);
     if (t === 'route') return routeClick(e);
@@ -154,26 +178,52 @@
     if (d.kind === 'pipe' || d.kind === 'cable') updateMeter(e.point, cur);
     else if (d.kind === 'measure' || d.kind === 'area' || d.kind === 'shape') { const pts = d.pts.concat([cur]); U().meterMeasure(e.point, pts); }
   }
-  function onDbl(e) { if (T.draw && T.draw.kind !== 'shape' || (T.draw && T.draw.shape === 'poly')) { e.preventDefault(); T.finish(); } }
+  function onDbl(e) {
+    if (T.tool === 'select' && FT.imp && FT.imp.unlocked.size && map.getLayer('imp-line')) {
+      const f = map.queryRenderedFeatures([[e.point.x - 7, e.point.y - 7], [e.point.x + 7, e.point.y + 7]], { layers: ['imp-line'] }).find(x => FT.imp.unlocked.has(x.properties.imp));
+      if (f && FT.imp.insertVertex(f.properties.imp, +f.properties.fi, ll(e))) { e.preventDefault(); return; }
+    }
+    onDbl2(e);
+  }
+  function onDbl2(e) { if (T.draw && T.draw.kind !== 'shape' || (T.draw && T.draw.shape === 'poly')) { e.preventDefault(); T.finish(); } }
   function onCtx(e) {
     if (T.draw) { e.preventDefault && e.preventDefault(); T.finish(); return; }
-    const h = hit(e); if (h) { T.select(h.kind, h.id); }
-    U().ctxMenu(e.originalEvent.clientX, e.originalEvent.clientY, h, ll(e));
+    const h = hit(e), extra = [];
+    if (map.getLayer('impv-pt')) { const iv = map.queryRenderedFeatures([[e.point.x - 8, e.point.y - 8], [e.point.x + 8, e.point.y + 8]], { layers: ['impv-pt'] }); if (iv.length) { const pr = iv[0].properties; extra.push([FT.lang === 'ar' ? 'حذف هذه النقطة' : 'Delete this point', () => FT.imp.deleteVertex(pr)]); } }
+    if (h && !(h.kind === 'bld' && T.bsel.has(h.id))) { T.select(h.kind, h.id); }
+    U().ctxMenu(e.originalEvent.clientX, e.originalEvent.clientY, h, ll(e), extra);
   }
 
   // node dragging
   function onDown(e) {
     if (T.tool !== 'select' || e.originalEvent.button !== 0) return;
+    const bx = [[e.point.x - 8, e.point.y - 8], [e.point.x + 8, e.point.y + 8]];
+    if (!(FT.store && FT.store.mode === 'view')) {
+      if (map.getLayer('bh-pt') && T.sel && T.sel.kind === 'bld') { // building handles: stretch / move / single corner
+        const hb = map.queryRenderedFeatures(bx, { layers: ['bh-pt', 'bh-vtx'] });
+        if (hb.length) { const f = hb.find(x => x.layer.id === 'bh-pt') || hb[0], k = f.properties.k; if (FT.bedit.begin(T.sel.id, k, k === 'vtx' ? f.properties.i : f.properties.d, ll(e))) { dragging = { bh: true, moved: false, start: ll(e) }; map.dragPan.disable(); return; } }
+      }
+      if (map.getLayer('impv-pt') && !e.originalEvent.shiftKey) { // vertex of an unlocked imported file
+        const iv = map.queryRenderedFeatures(bx, { layers: ['impv-pt'] });
+        if (iv.length) { const pr = iv[0].properties; dragging = { imp: { g: pr.g, f: +pr.f, r: +pr.r, i: +pr.i }, moved: false, start: ll(e) }; map.dragPan.disable(); return; }
+      }
+    }
     const h = hit(e); if (!h || h.kind !== 'node') return;
     if (T.locked.has(h.id)) return;
     T.select('node', h.id); dragging = { id: h.id, moved: false, start: ll(e) }; map.dragPan.disable();
   }
+  let impTick = 0;
   function dragMove(e) {
-    const d = dragging; if (!d.moved) { if (FT.dist(d.start, ll(e)) < 0.6) return; FT.commit(); d.moved = true; }
+    const d = dragging;
+    if (d.bh) { if (!d.moved && FT.dist(d.start, ll(e)) < 0.4) return; d.moved = true; FT.bedit.update(ll(e)); return; }
+    if (d.imp) { if (!d.moved) { if (FT.dist(d.start, ll(e)) < 0.4) return; FT.commit(); d.moved = true; } FT.imp.moveVertex(d.imp, ll(e)); const now = Date.now(); if (now - impTick > 45) { impTick = now; FT.imp.render(); } return; }
+    if (!d.moved) { if (FT.dist(d.start, ll(e)) < 0.6) return; FT.commit(); d.moved = true; }
     T.moveNode(d.id, ll(e)); FT.map.renderNet(); FT.map.setSelection('node', d.id); U().meterNode(e.point, FT.dist(d.start, ll(e)));
   }
   function onUp() {
     if (!dragging) return; const d = dragging; map.dragPan.enable(); U().meter(null);
+    if (d.bh) { FT.bedit.end(); setTimeout(() => { dragging = null; }, 0); return; }
+    if (d.imp) { if (d.moved) { FT.imp.render(); FT.changed('import'); } setTimeout(() => { dragging = null; }, 0); return; }
     if (d.moved) { FT.changed('move'); U().selectionChanged(); } setTimeout(() => { dragging = null; }, 0); if (!d.moved) dragging = null;
   }
 
@@ -267,18 +317,18 @@
   function subClick(e, p) {
     const pick = nodeNear(e.point, 22); if (pick && pick.ratio) { T.sel = { kind: 'node', id: pick.id }; FT.map.setSelection('node', pick.id); U().selectionChanged(); U().hint(pick.name + ' ' + pick.ratio + ' → ' + (FT.lang === 'ar' ? 'انقر على بيت لربطه' : 'click a building to connect')); return; }
     const b = FT.map.buildingAt(p), S = FT.state, box = T.sel && T.sel.kind === 'node' ? S.nodes[T.sel.id] : null;
-    if (!box || !box.ratio) { U().toast('Select a SK / DK / BK with a splitter ratio first'); return; }
+    if (!box || !box.ratio) { U().toast('Select an FDC / iFDC / FDB with a splitter ratio first'); return; }
     if (!b) { U().toast('Click a building'); return; }
     const cap = parseInt(box.ratio.split(':')[1], 10), used = Object.values(S.subs).filter(s => s.node === box.id).length;
     if (used >= cap) { U().toast('Splitter ' + box.ratio + ' is full (' + used + '/' + cap + ')'); return; }
     const ring = FT.map.buildingRing(b); const c = FT.centroid(ring); FT.commit(); S.seq.sub++;
-    const sub = { id: FT.uid('s'), name: 'SUB-' + S.seq.sub, node: box.id, bld: b, ll: c, port: used + 1 }; S.subs[sub.id] = sub; (S.bld[b] = S.bld[b] || {}).st = 1;
+    const sub = { id: FT.uid('s'), name: 'ONT-' + S.seq.sub, node: box.id, bld: b, ll: c, port: used + 1 }; S.subs[sub.id] = sub; (S.bld[b] = S.bld[b] || {}).st = 1;
     const drop = FT.addCable([box.ll, c], box.id, box.id, 'dr2', 'free', [box.id, box.id], [[box.ll, c]]); drop.drop = sub.id; drop.name = 'Drop ' + sub.name; drop.sub = sub.id;
     FT.changed('sub'); U().toast(sub.name + ' → ' + box.name + ' port ' + sub.port + '/' + cap);
   }
 
   // ---------------- keyboard ----------------
-  const KEYS = { v: 'select', l: 'area', u: 'measure', m: 'mh', d: 'pole', 1: 'sk', 2: 'dk', 3: 'bk', o: 'olt', e: 'splice', b: 'pipe', k: 'cable', g: 'route', r: 'reconnect', n: 'number' };
+  const KEYS = { v: 'select', l: 'area', u: 'measure', m: 'mh', j: 'hh', d: 'pole', 1: 'sk', 2: 'dk', 3: 'bk', o: 'olt', e: 'splice', b: 'pipe', k: 'cable', g: 'route', r: 'reconnect', n: 'number' };
   function onKey(ev) {
     const tg = ev.target; if (tg && /INPUT|TEXTAREA|SELECT/.test(tg.tagName) && ev.key !== 'Escape') return;
     const k = ev.key;

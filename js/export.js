@@ -33,26 +33,26 @@
 
   // ---------------- DXF ----------------
   const LAYERS = [
-    { name: 'FTTH_CABLE_BACKBONE', color: 6 }, { name: 'FTTH_CABLE_DISTRIBUTION', color: 4 }, { name: 'FTTH_CABLE_DROP', color: 3 },
+    { name: 'FTTH_CABLE_FEEDER', color: 6 }, { name: 'FTTH_CABLE_DISTRIBUTION', color: 4 }, { name: 'FTTH_CABLE_DROP', color: 3 },
     { name: 'FTTH_PIPE', color: 5 }, { name: 'FTTH_PIPE_AERIAL', color: 5, ltype: 'DASHED' },
-    { name: 'FTTH_OLT', color: 3 }, { name: 'FTTH_SK', color: 30 }, { name: 'FTTH_DK', color: 2 }, { name: 'FTTH_BK', color: 1 }, { name: 'FTTH_MANHOLE', color: 8 }, { name: 'FTTH_POLE', color: 34 },
+    { name: 'FTTH_OLT', color: 3 }, { name: 'FTTH_FDC', color: 30 }, { name: 'FTTH_IFDC', color: 2 }, { name: 'FTTH_FDB', color: 1 }, { name: 'FTTH_MH', color: 8 }, { name: 'FTTH_HH', color: 9 }, { name: 'FTTH_WALL_ANCHOR', color: 34 },
     { name: 'FTTH_SPLICE', color: 6 }, { name: 'FTTH_LABELS', color: 7 }, { name: 'BUILDINGS', color: 8 }, { name: 'ROADS', color: 9 }, { name: 'ROAD_NAMES', color: 8 }, { name: 'HOUSE_NUMBERS', color: 2 }, { name: 'AREA_FRAME', color: 1 },
   ];
   X.buildDxf = function (data, ring, opt) {
     const P = ll => FT.dxf.utm(ll[1], ll[0], 37), ents = [];
     const add = e => ents.push(e);
-    const lay = { olt: 'FTTH_OLT', sk: 'FTTH_SK', dk: 'FTTH_DK', bk: 'FTTH_BK', mh: 'FTTH_MANHOLE', pole: 'FTTH_POLE' };
+    const lay = { olt: 'FTTH_OLT', sk: 'FTTH_FDC', dk: 'FTTH_IFDC', bk: 'FTTH_FDB', mh: 'FTTH_MH', hh: 'FTTH_HH', pole: 'FTTH_WALL_ANCHOR' };
     if (opt.frame) add({ layer: 'AREA_FRAME', kind: 'poly', closed: true, pts: ring.map(P) });
     if (opt.bld) data.blds.forEach(b => add({ layer: 'BUILDINGS', kind: 'poly', closed: true, pts: b.ring.map(P) }));
     if (data.roads) data.roads.forEach(r => { add({ layer: 'ROADS', kind: 'poly', pts: r.pts.map(P) }); if (opt.rname && r.name) { const m = P(r.pts[Math.floor(r.pts.length / 2)]); add({ layer: 'ROAD_NAMES', kind: 'text', pts: [m], h: 2.5, text: r.name }); } });
     if (opt.nums) data.blds.forEach(b => { const o = b.o || {}; if (o.num) { const c = P(b.c); add({ layer: 'HOUSE_NUMBERS', kind: 'text', pts: [[c[0] - 1.2, c[1] - 1]], h: 2, text: FT.num.label(o) }); } });
     if (opt.pipes) data.pipes.forEach(p => add({ layer: p.ptype === 'aerial' ? 'FTTH_PIPE_AERIAL' : 'FTTH_PIPE', kind: 'poly', pts: p.pts.map(P) }));
-    if (opt.cables) data.cables.forEach(c => { const pts = [].concat(...FT.cableSpans(c).map((s, i) => i ? s.pts.slice(1) : s.pts)); if (pts.length < 2) return; const g = (FT.CABLE_CAT.find(x => x.id === c.cat) || {}).group || 'Backbone'; add({ layer: g === 'Backbone' ? 'FTTH_CABLE_BACKBONE' : g === 'Drop' ? 'FTTH_CABLE_DROP' : 'FTTH_CABLE_DISTRIBUTION', kind: 'poly', pts: pts.map(P) }); if (opt.text && pts.length > 1) { const m = P(pts[Math.floor(pts.length / 2)]); add({ layer: 'FTTH_LABELS', kind: 'text', pts: [[m[0] + 2, m[1] + 2]], h: 2.2, text: c.name + ' ' + FT.fmtLenShort(FT.cableLength(c)) }); } });
+    if (opt.cables) data.cables.forEach(c => { const pts = [].concat(...FT.cableSpans(c).map((s, i) => i ? s.pts.slice(1) : s.pts)); if (pts.length < 2) return; const g = (FT.CABLE_CAT.find(x => x.id === c.cat) || {}).group || 'Feeder'; add({ layer: g === 'Feeder' ? 'FTTH_CABLE_FEEDER' : g === 'Drop' ? 'FTTH_CABLE_DROP' : 'FTTH_CABLE_DISTRIBUTION', kind: 'poly', pts: pts.map(P) }); if (opt.text && pts.length > 1) { const m = P(pts[Math.floor(pts.length / 2)]); add({ layer: 'FTTH_LABELS', kind: 'text', pts: [[m[0] + 2, m[1] + 2]], h: 2.2, text: c.name + ' ' + FT.fmtLenShort(FT.cableLength(c)) }); } });
     if (opt.nodes) data.nodes.forEach(n => {
       const c = P(n.ll), l = lay[n.type] || 'FTTH_LABELS';
       if (n.type === 'olt') add({ layer: l, kind: 'poly', closed: true, pts: [[c[0] - 4, c[1] - 4], [c[0] + 4, c[1] - 4], [c[0] + 4, c[1] + 4], [c[0] - 4, c[1] + 4]] });
       else if (n.type === 'pole') { add({ layer: l, kind: 'line', pts: [[c[0] - 2, c[1]], [c[0] + 2, c[1]]] }); add({ layer: l, kind: 'line', pts: [[c[0], c[1] - 2], [c[0], c[1] + 2]] }); }
-      else { add({ layer: l, kind: 'circle', pts: [c], r: n.type === 'mh' ? 1.6 : 3 }); if (n.type === 'mh') { add({ layer: l, kind: 'line', pts: [[c[0] - 1.6, c[1]], [c[0] + 1.6, c[1]]] }); add({ layer: l, kind: 'line', pts: [[c[0], c[1] - 1.6], [c[0], c[1] + 1.6]] }); } }
+      else { add({ layer: l, kind: 'circle', pts: [c], r: (n.type === 'mh' || n.type === 'hh') ? 1.6 : 3 }); if (n.type === 'mh' || n.type === 'hh') { add({ layer: l, kind: 'line', pts: [[c[0] - 1.6, c[1]], [c[0] + 1.6, c[1]]] }); add({ layer: l, kind: 'line', pts: [[c[0], c[1] - 1.6], [c[0], c[1] + 1.6]] }); } }
       if (opt.text) add({ layer: 'FTTH_LABELS', kind: 'text', pts: [[c[0] + 4.5, c[1] + 1]], h: 3, text: n.name + (n.ratio ? ' ' + n.ratio : '') + (n.label ? ' ' + n.label : '') });
     });
     if (opt.splices) data.splices.forEach(s => { const n = FT.state.nodes[s.node]; if (!n) return; const c = P(n.ll); add({ layer: 'FTTH_SPLICE', kind: 'poly', closed: true, pts: [[c[0] - 2, c[1] - 6], [c[0] + 2, c[1] - 6], [c[0] + 2, c[1] - 2], [c[0] - 2, c[1] - 2]] }); if (opt.text) add({ layer: 'FTTH_LABELS', kind: 'text', pts: [[c[0] + 3, c[1] - 6]], h: 2.2, text: 'EK ' + (s.label || '') }); });
@@ -129,7 +129,7 @@
   // ---------------- GeoJSON ----------------
   X.geojson = function () {
     const S = FT.state, f = [];
-    Object.values(S.nodes).forEach(n => f.push({ type: 'Feature', properties: { kind: 'node', type: n.type, name: n.name, ratio: n.ratio, label: n.label }, geometry: { type: 'Point', coordinates: n.ll } }));
+    Object.values(S.nodes).forEach(n => f.push({ type: 'Feature', properties: { kind: 'node', type: n.type, name: n.name, code: n.code || '', ratio: n.ratio, label: n.label }, geometry: { type: 'Point', coordinates: n.ll } }));
     Object.values(S.pipes).forEach(p => f.push({ type: 'Feature', properties: { kind: 'pipe', name: p.name, length_m: +FT.pathLen(p.pts).toFixed(2), cat: p.cat }, geometry: { type: 'LineString', coordinates: p.pts } }));
     Object.values(S.cables).forEach(c => { const pts = [].concat(...FT.cableSpans(c).map((s, i) => i ? s.pts.slice(1) : s.pts)); f.push({ type: 'Feature', properties: { kind: 'cable', name: c.name, core: c.core, std: c.std, length_m: +FT.cableLength(c).toFixed(2) }, geometry: { type: 'LineString', coordinates: pts } }); });
     Object.entries(S.bld).forEach(([id, o]) => { if (o.num || o.fp) f.push({ type: 'Feature', properties: { kind: 'building', id, number: FT.num.label(o), floors: o.floors || null }, geometry: o.fp ? { type: 'Polygon', coordinates: [o.fp.concat([o.fp[0]])] } : { type: 'Point', coordinates: [0, 0] } }); });
@@ -157,7 +157,7 @@
     k += '<Folder><name>Numbered buildings</name>' + Object.entries(S.bld).filter(([, o]) => o.num && o.fp).map(([id, o]) => '<Placemark><name>' + esc(FT.num.label(o)) + '</name><Polygon><outerBoundaryIs><LinearRing><coordinates>' + ln(o.fp.concat([o.fp[0]])) + '</coordinates></LinearRing></outerBoundaryIs></Polygon></Placemark>').join('') + '</Folder>';
     return k + '</Document></kml>';
   };
-  X.kmz = function () { download('ftth_' + stamp() + '.kmz', zipOne('doc.kml', new TextEncoder().encode(X.kml()))); };
+  X.zipOne = zipOne; X.kmz = function () { FT.deliver.kmz(); };
 
   // ---------------- CSV / JSON / print ----------------
   X.csv = function (rows) { return '﻿' + rows.map(r => r.map(v => { v = v == null ? '' : String(v); return /[",\n;]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; }).join(',')).join('\r\n'); };

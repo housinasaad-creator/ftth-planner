@@ -4,17 +4,22 @@
   const FT = G.FT = G.FT || {};
 
   // ---------------- catalogues (industry-standard values) ----------------
+  // Names follow the Syrian Telecom (ST) FTTH micro-trenching specification. Internal keys stay sk/dk/bk (old projects keep working).
   FT.NODE_TYPES = {
-    olt:  { key: 'olt',  short: 'OLT', color: '#2bd18b', prefix: 'OLT' },
-    sk:   { key: 'sk',   short: 'SK',  color: '#ff8a3d', prefix: 'SK' },
-    dk:   { key: 'dk',   short: 'DK',  color: '#ffc233', prefix: 'DK' },
-    bk:   { key: 'bk',   short: 'BK',  color: '#ff4f7a', prefix: 'BK' },
-    mh:   { key: 'mh',   short: 'MH',  color: '#9aa1b6', prefix: 'MH' },
-    pole: { key: 'pole', short: 'D',   color: '#c9a37a', prefix: 'D' },
+    olt:  { key: 'olt',  short: 'OLT',  color: '#2bd18b', prefix: 'OLT',  en: 'OLT / Central office (CO)', ar: 'OLT / مقسم مركزي (CO)' },
+    sk:   { key: 'sk',   short: 'FDC',  color: '#ff8a3d', prefix: 'FDC',  en: 'FDC — Fibre distribution cabinet (stage 1)', ar: 'FDC — خزانة التوزيع الضوئية (المرحلة 1)' },
+    dk:   { key: 'dk',   short: 'iFDC', color: '#ffc233', prefix: 'iFDC', en: 'iFDC — Intermediate cabinet (optional)', ar: 'iFDC — خزانة وسيطة (اختيارية)' },
+    bk:   { key: 'bk',   short: 'FDB',  color: '#ff4f7a', prefix: 'FDB',  en: 'FDB — Fibre distribution box (one per building, stage 2)', ar: 'FDB — علبة التوزيع الضوئية (لكل مبنى، المرحلة 2)' },
+    mh:   { key: 'mh',   short: 'MH',   color: '#9aa1b6', prefix: 'MH',   en: 'MH — Main manhole', ar: 'MH — منهل رئيسي' },
+    hh:   { key: 'hh',   short: 'HH',   color: '#cfd6ea', prefix: 'HH',   en: 'HH — Handhole (max 60×60×60 cm)', ar: 'HH — غرفة تفتيش صغيرة (60×60×60 سم كحد أقصى)' },
+    pole: { key: 'pole', short: 'WA',   color: '#c9a37a', prefix: 'WA',   en: 'WA — Wall anchor (aerial only on walls, ST approval)', ar: 'WA — تعليق جداري (الهوائي على الجدران فقط وبموافقة ST)' },
   };
+  FT.nodeTypeName = t => { const x = FT.NODE_TYPES[t]; return x ? (FT.lang === 'ar' ? x.ar : x.en) : t; };
+  FT.BOX_TYPES = ['sk', 'dk', 'bk']; // nodes that hold a splitter / are cabinets
   FT.PLACEMENTS = ['buried', 'aerial', 'wall', 'building'];
-  FT.RATIOS = ['', '1:2', '1:4', '1:8', '1:16', '1:32'];
-  FT.SPLITTER_LOSS = { '1:2': 3.7, '1:4': 7.2, '1:8': 10.5, '1:16': 13.8, '1:32': 17.1 }; // dB, PLC typical
+  FT.RATIOS = ['', '1:2', '1:4', '1:8', '1:16']; // 1:32 is not allowed by the ST specification (total split <= 1:16)
+  FT.SPLITTER_LOSS = { '1:2': 4.0, '1:4': 7.3, '1:8': 10.7, '1:16': 14.0, '1:32': 17.5 }; // dB, MAXIMUM insertion loss from the ST specification (1:32 only for old projects)
+  FT.LIMITS = { maxSplit: 16, maxStages: 2, maxLoss: 28, maxSpan: 250, trenchDepth: 30, trenchWidth: 6, minCover: 10, fillMax: 70, microWays: 12, hhSize: 60 };
   // TIA-598-C 12-colour code
   FT.FIBER_COLORS = [
     { n: 1, code: 'BL', hex: '#2f6bff', en: 'Blue', ar: 'أزرق' }, { n: 2, code: 'OR', hex: '#ff8a1f', en: 'Orange', ar: 'برتقالي' },
@@ -26,40 +31,40 @@
   ];
   FT.fiberLabel = (tube, core) => { const c = FT.FIBER_COLORS[(core - 1) % 12]; return 'T' + tube + ' C' + core + ' (' + c.code + ')'; };
   FT.CABLE_CAT = [
-    { id: 'bb96',  group: 'Backbone', name: 'Backbone 96C (8×12) loose-tube G.652.D',  core: 96,  tubes: 8,  std: 'G.652.D', struct: 'loose_tube' },
-    { id: 'bb144', group: 'Backbone', name: 'Backbone 144C (12×12) loose-tube G.652.D', core: 144, tubes: 12, std: 'G.652.D', struct: 'loose_tube' },
-    { id: 'bb288', group: 'Backbone', name: 'Backbone 288C (24×12) loose-tube G.652.D', core: 288, tubes: 24, std: 'G.652.D', struct: 'loose_tube' },
-    { id: 'bb432', group: 'Backbone', name: 'Backbone 432C (36×12) loose-tube G.652.D', core: 432, tubes: 36, std: 'G.652.D', struct: 'loose_tube' },
-    { id: 'bb576', group: 'Backbone', name: 'Backbone 576C (48×12) loose-tube G.652.D', core: 576, tubes: 48, std: 'G.652.D', struct: 'loose_tube' },
-    { id: 'bb864', group: 'Backbone', name: 'Backbone 864C (72×12) loose-tube G.652.D', core: 864, tubes: 72, std: 'G.652.D', struct: 'loose_tube' },
-    { id: 'ds24',  group: 'Distribution', name: 'Distribution 24C (2×12) loose-tube G.657.A1', core: 24, tubes: 2, std: 'G.657.A1', struct: 'loose_tube' },
-    { id: 'ds48',  group: 'Distribution', name: 'Distribution 48C (4×12) loose-tube G.657.A1', core: 48, tubes: 4, std: 'G.657.A1', struct: 'loose_tube' },
-    { id: 'ds96',  group: 'Distribution', name: 'Distribution 96C (8×12) loose-tube G.657.A1', core: 96, tubes: 8, std: 'G.657.A1', struct: 'loose_tube' },
-    { id: 'dr12',  group: 'Drop', name: 'Drop 12C (1×12) G.657.A2', core: 12, tubes: 1, std: 'G.657.A2', struct: 'drop' },
-    { id: 'dr1',   group: 'Drop', name: 'Drop 1C G.657.A2', core: 1, tubes: 1, std: 'G.657.A2', struct: 'drop' },
-    { id: 'dr2',   group: 'Drop', name: 'Drop 2C G.657.A2', core: 2, tubes: 1, std: 'G.657.A2', struct: 'drop' },
-    { id: 'dr4',   group: 'Drop', name: 'Drop 4C G.657.A2', core: 4, tubes: 1, std: 'G.657.A2', struct: 'drop' },
+    { id: 'bb96',  group: 'Feeder', name: 'Feeder 96C (8×12) loose-tube G.652.D',  core: 96,  tubes: 8,  std: 'G.652.D', struct: 'loose_tube', od: 11 },
+    { id: 'bb144', group: 'Feeder', name: 'Feeder 144C (12×12) loose-tube G.652.D', core: 144, tubes: 12, std: 'G.652.D', struct: 'loose_tube', od: 12.5 },
+    { id: 'bb288', group: 'Feeder', name: 'Feeder 288C (24×12) loose-tube G.652.D', core: 288, tubes: 24, std: 'G.652.D', struct: 'loose_tube', od: 15.5 },
+    { id: 'bb432', group: 'Feeder', name: 'Feeder 432C (36×12) loose-tube G.652.D', core: 432, tubes: 36, std: 'G.652.D', struct: 'loose_tube', od: 18 },
+    { id: 'bb576', group: 'Feeder', name: 'Feeder 576C (48×12) loose-tube G.652.D', core: 576, tubes: 48, std: 'G.652.D', struct: 'loose_tube', od: 20 },
+    { id: 'bb864', group: 'Feeder', name: 'Feeder 864C (72×12) loose-tube G.652.D', core: 864, tubes: 72, std: 'G.652.D', struct: 'loose_tube', od: 23 },
+    { id: 'ds24',  group: 'Distribution', name: 'Distribution 24C (2×12) loose-tube G.652.D', core: 24, tubes: 2, std: 'G.652.D', struct: 'loose_tube', od: 6.5 },
+    { id: 'ds48',  group: 'Distribution', name: 'Distribution 48C (4×12) loose-tube G.652.D', core: 48, tubes: 4, std: 'G.652.D', struct: 'loose_tube', od: 8 },
+    { id: 'ds96',  group: 'Distribution', name: 'Distribution 96C (8×12) loose-tube G.652.D', core: 96, tubes: 8, std: 'G.652.D', struct: 'loose_tube', od: 10 },
+    { id: 'dr12',  group: 'Drop', name: 'Drop 12C (1×12) G.657.A2', core: 12, tubes: 1, std: 'G.657.A2', struct: 'drop', od: 6.5 },
+    { id: 'dr1',   group: 'Drop', name: 'Drop 1C G.657.A2', core: 1, tubes: 1, std: 'G.657.A2', struct: 'drop', od: 3 },
+    { id: 'dr2',   group: 'Drop', name: 'Drop 2C G.657.A2', core: 2, tubes: 1, std: 'G.657.A2', struct: 'drop', od: 4 },
+    { id: 'dr4',   group: 'Drop', name: 'Drop 4C G.657.A2', core: 4, tubes: 1, std: 'G.657.A2', struct: 'drop', od: 5 },
   ];
   FT.CABLE_STD = ['G.652.D', 'G.657.A1', 'G.657.A2', 'G.657.B3'];
   FT.CABLE_STRUCT = ['loose_tube', 'ribbon', 'figure8', 'adss', 'drop'];
   FT.PIPE_CAT = [
-    { id: 'h32', name: 'HDPE Ø32/26', type: 'hdpe' },
-    { id: 'h40', name: 'HDPE Ø40/33 (main buried duct)', type: 'hdpe', short: 'HDPE Ø40/33' },
-    { id: 'h50', name: 'HDPE Ø50/41', type: 'hdpe' },
-    { id: 'aer', name: 'Aerial messenger route', type: 'aerial' },
-    { id: 'mc12', name: 'Microduct bundle 12×Ø7/5.5', type: 'microduct' },
-    { id: 'mc7', name: 'Microduct bundle 7×Ø10/8', type: 'microduct' },
+    { id: 'h32', name: 'HDPE Ø32/26', type: 'hdpe', idmm: 26 },
+    { id: 'h40', name: 'HDPE Ø40/33 (main buried duct)', type: 'hdpe', short: 'HDPE Ø40/33', idmm: 33 },
+    { id: 'h50', name: 'HDPE Ø50/41', type: 'hdpe', idmm: 41 },
+    { id: 'aer', name: 'Aerial on walls (ST approval)', type: 'aerial' },
+    { id: 'mc12', name: 'Microduct bundle 12 ways Ø12/10 (max 12, +1 spare)', type: 'microduct', ways: 12, idmm: 10 },
+    { id: 'mc7', name: 'Microduct bundle 7 ways Ø14/12', type: 'microduct', ways: 7, idmm: 12 },
   ];
   FT.PIPE_TYPES = ['hdpe', 'microduct', 'aerial', 'custom'];
   FT.NODE_CAT = [
-    { id: 'c_bk', name: 'BK (Building Box)', type: 'bk' }, { id: 'c_dk', name: 'DK (Distribution Box)', type: 'dk' },
-    { id: 'c_sk', name: 'SK (Field Cabinet)', type: 'sk' }, { id: 'c_odp', name: 'ODP Box 16 Core', type: 'bk' },
-    { id: 'c_mh', name: 'Splice manhole', type: 'mh' }, { id: 'c_fm', name: 'Field manhole (chamber)', type: 'mh' },
+    { id: 'c_bk', name: 'FDB IP65 (building box, SC/APC)', type: 'bk' }, { id: 'c_dk', name: 'iFDC (intermediate cabinet)', type: 'dk' },
+    { id: 'c_sk', name: 'FDC IP65 (cabinet, stage-1 splitter)', type: 'sk' }, { id: 'c_odp', name: 'FDB 16 core', type: 'bk' },
+    { id: 'c_mh', name: 'MH main manhole', type: 'mh' }, { id: 'c_fm', name: 'HH handhole 60×60×60 cm', type: 'hh' },
     { id: 'c_e144', name: 'Splice closure IP68 144F', type: 'mh' }, { id: 'c_e24', name: 'Splice closure IP68 24F', type: 'mh' },
     { id: 'c_e48', name: 'Splice closure IP68 48F', type: 'mh' }, { id: 'c_e96', name: 'Splice closure IP68 96F', type: 'mh' },
   ];
   FT.CASSETTES = ['', 'IP68 24F', 'IP68 48F', 'IP68 96F', 'custom'];
-  FT.BASE_LOSS = { fiber1490: 0.25, fiber1310: 0.35, connector: 0.3, splice: 0.1, txDbm: 3, rxSens: -27 };
+  FT.BASE_LOSS = { fiber1490: 0.30, fiber1310: 0.40, connector: 0.5, splice: 0.1, txDbm: 3, rxSens: -27 }; // ST maximums: 0.40 dB/km @1310, 0.30 @1550; SC/APC <= 0.5 dB
 
   // ---------------- geometry ----------------
   const R = 6371008.8, rad = Math.PI / 180;
@@ -101,7 +106,7 @@
   };
 
   // ---------------- state ----------------
-  FT.blank = () => ({ v: 3, meta: { name: '', created: Date.now() }, nodes: {}, pipes: {}, cables: {}, splices: {}, bld: {}, subs: {}, wdev: {}, wlinks: {}, imports: {}, seq: { olt: 0, sk: 0, dk: 0, bk: 0, mh: 0, pole: 0, pipe: 0, cable: 0, splice: 0, sub: 0, design: 0, wdev: 0, wlink: 0 }, folders: {}, ui: { ratio: { sk: '', dk: '', bk: '' } } });
+  FT.blank = () => ({ v: 3, meta: { name: '', created: Date.now() }, nodes: {}, pipes: {}, cables: {}, splices: {}, bld: {}, subs: {}, wdev: {}, wlinks: {}, imports: {}, ord: {}, seq: { olt: 0, sk: 0, dk: 0, bk: 0, mh: 0, hh: 0, pole: 0, pipe: 0, cable: 0, splice: 0, sub: 0, design: 0, wdev: 0, wlink: 0 }, folders: {}, ui: { ratio: { sk: '', dk: '', bk: '' } } });
   FT.state = FT.blank();
   FT.listeners = [];
   FT.onChange = fn => FT.listeners.push(fn);
@@ -115,18 +120,39 @@
   FT.redo = function () { if (!redo.length) return false; undo.push(snap()); FT.state = JSON.parse(redo.pop()); FT.changed('redo'); return true; };
   FT.canUndo = () => undo.length > 0; FT.canRedo = () => redo.length > 0;
   FT.clearHistory = () => { undo = []; redo = []; };
-  FT.setState = function (s) { FT.state = Object.assign(FT.blank(), s); FT.state.seq = Object.assign(FT.blank().seq, s.seq || {}); FT.clearHistory(); FT.changed('load'); };
+  FT.setState = function (s) { FT.state = Object.assign(FT.blank(), s); FT.state.seq = Object.assign(FT.blank().seq, s.seq || {}); FT.migrate(FT.state); FT.clearHistory(); FT.changed('load'); };
+  // old projects: SK/DK/BK/Backbone names -> the official ST names (types and ids are unchanged)
+  FT.migrate = function (S) {
+    S.ord = S.ord || {};
+    Object.values(S.nodes || {}).forEach(n => { n.name = String(n.name || '').replace(/^SK-/, 'FDC-').replace(/^DK-/, 'iFDC-').replace(/^BK-/, 'FDB-').replace(/^D-(\d+)$/, 'WA-$1'); if (n.type === 'pole' && n.place === 'aerial') n.place = 'wall'; });
+    Object.values(S.cables || {}).forEach(c => { c.name = String(c.name || '').replace(/^Backbone /, 'Feeder '); });
+    Object.values(S.pipes || {}).forEach(p => { if (p.depth == null) p.depth = 30; if (p.width == null) p.width = 6; if (p.cover == null) p.cover = 24; });
+    return S;
+  };
+  // layer order (kept as explicit arrays: the cloud database does not keep object-key order)
+  FT.ordered = function (coll) {
+    const o = FT.state[coll] || {}, ord = (FT.state.ord && FT.state.ord[coll]) || [], seen = new Set(), out = [];
+    ord.forEach(id => { if (o[id] && !seen.has(id)) { seen.add(id); out.push(o[id]); } });
+    Object.keys(o).forEach(id => { if (!seen.has(id)) out.push(o[id]); });
+    return out;
+  };
+  FT.reorder = function (coll, dragId, targetId, after) {
+    const S = FT.state, ids = FT.ordered(coll).map(x => x.id).filter(i => i !== dragId), ti = ids.indexOf(targetId);
+    if (ti < 0 || !(S[coll] || {})[dragId]) return false;
+    ids.splice(after ? ti + 1 : ti, 0, dragId); (S.ord = S.ord || {})[coll] = ids; return true;
+  };
+  FT.zOrder = function (coll) { const l = FT.ordered(coll), n = l.length, z = {}; l.forEach((o, i) => { z[o.id] = n - i; }); return z; }; // first in the list = drawn on top
   FT.uid = p => p + Math.random().toString(36).slice(2, 9);
 
   // ---------------- object factories ----------------
   FT.addNode = function (type, ll, extra) {
     const S = FT.state, t = FT.NODE_TYPES[type]; S.seq[type] = (S.seq[type] || 0) + 1;
-    const n = Object.assign({ id: FT.uid('n'), type, ll, name: t.prefix + '-' + S.seq[type], label: '', ratio: type === 'sk' || type === 'dk' || type === 'bk' ? (S.ui.ratio[type] || '') : '', place: type === 'pole' ? 'aerial' : 'buried', cores: 24, note: '', color: '', cat: '', cassette: '', size: '', dir: 0 }, extra || {});
+    const n = Object.assign({ id: FT.uid('n'), type, ll, name: t.prefix + '-' + S.seq[type], label: '', ratio: type === 'sk' || type === 'dk' || type === 'bk' ? (S.ui.ratio[type] || '') : '', place: type === 'pole' ? 'wall' : 'buried', code: '', cores: 24, note: '', color: '', cat: '', cassette: '', size: '', dir: 0 }, extra || {});
     S.nodes[n.id] = n; return n;
   };
   FT.addPipe = function (pts, a, b, ptype, cat) {
     const S = FT.state; S.seq.pipe++;
-    const p = { id: FT.uid('p'), name: 'Pipe #' + S.seq.pipe, no: S.seq.pipe, ptype: ptype || 'hdpe', cat: cat || 'h40', pts, a, b, note: '', color: '' };
+    const p = { id: FT.uid('p'), name: 'Pipe #' + S.seq.pipe, no: S.seq.pipe, ptype: ptype || 'hdpe', cat: cat || 'h40', pts, a, b, note: '', color: '', depth: 30, width: 6, cover: 24 };
     S.pipes[p.id] = p; return p;
   };
   FT.addCable = function (pts, a, b, cat, medium, nodeIds, segs) {
@@ -164,7 +190,7 @@
   FT.DEFAULT_PRICES = {
     cable: { bb96: 1.6, bb144: 2.2, bb288: 4.0, bb432: 5.8, bb576: 7.6, bb864: 11.0, ds24: 0.55, ds48: 0.9, ds96: 1.6, dr12: 0.7, dr1: 0.12, dr2: 0.15, dr4: 0.25 },   // USD per metre
     pipe: { h32: 0.45, h40: 0.6, h50: 0.8, aer: 0.35, mc12: 2.4, mc7: 1.8 },                                                                                     // USD per metre
-    node: { olt: 4500, sk: 450, dk: 140, bk: 38, mh: 120, pole: 85 },                                                                                            // USD each
+    node: { olt: 4500, sk: 450, dk: 140, bk: 38, mh: 120, hh: 45, pole: 85 },                                                                                            // USD each
     splitter: { '1:2': 4, '1:4': 8, '1:8': 14, '1:16': 30, '1:32': 55 },                                                                                         // USD each (inside SK/DK/BK)
     splice: 35,                                                                                                                                                  // USD per splice closure
     wdev: { ap: 220, cpe: 65, ptp: 380 },                                                                                                                        // USD each
@@ -179,10 +205,10 @@
     const cab = {}, pip = {}, nod = {}, spl = {};
     Object.values(S.cables).filter(c => inS('cables', c.id)).forEach(c => { cab[c.cat] = (cab[c.cat] || 0) + FT.cableLength(c); });
     Object.values(S.pipes).filter(p => inS('pipes', p.id)).forEach(p => { pip[p.cat] = (pip[p.cat] || 0) + FT.pathLen(p.pts); });
-    Object.values(S.nodes).filter(n => inS('nodes', n.id)).forEach(n => { nod[n.type] = (nod[n.type] || 0) + 1; if (n.ratio) spl[n.ratio] = (spl[n.ratio] || 0) + 1; });
+    Object.values(S.nodes).filter(n => inS('nodes', n.id)).forEach(n => { nod[n.type] = (nod[n.type] || 0) + 1; if (n.ratio) spl[n.ratio] = (spl[n.ratio] || 0) + (n.nsplit || 1); });
     Object.keys(cab).forEach(id => { const c = FT.CABLE_CAT.find(x => x.id === id); add('cable', c ? c.name.split(' loose')[0] : id, cab[id], 'm', P.cable[id] || 0); });
     Object.keys(pip).forEach(id => { const c = FT.PIPE_CAT.find(x => x.id === id); add('pipe', c ? c.name : id, pip[id], 'm', P.pipe[id] || 0); });
-    const NN = { olt: 'OLT', sk: 'SK', dk: 'DK', bk: 'BK', mh: 'Manhole', pole: 'Pole' };
+    const NN = { olt: 'OLT', sk: 'FDC cabinet', dk: 'iFDC cabinet', bk: 'FDB box', mh: 'MH manhole', hh: 'HH handhole', pole: 'WA wall anchor' };
     Object.keys(nod).forEach(t => add('node', NN[t] || t, nod[t], 'pc', P.node[t] || 0));
     Object.keys(spl).forEach(r => add('splitter', 'Splitter ' + r, spl[r], 'pc', P.splitter[r] || 0));
     add('splice', 'Splice closure', Object.values(S.splices).filter(s => inS('nodes', s.node)).length, 'pc', P.splice);
@@ -198,7 +224,7 @@
     const cab = {}, pip = {}, nod = {};
     Object.values(S.cables).filter(c => inScope('cables', c.id)).forEach(c => { const k = c.name + ' · ' + c.core + 'C ' + c.std; (cab[k] = cab[k] || { n: 0, len: 0 }); cab[k].n++; cab[k].len += FT.cableLength(c); });
     Object.values(S.pipes).filter(p => inScope('pipes', p.id)).forEach(p => { const cat = FT.PIPE_CAT.find(x => x.id === p.cat); const k = cat ? cat.name : p.ptype; (pip[k] = pip[k] || { n: 0, len: 0 }); pip[k].n++; pip[k].len += FT.pathLen(p.pts); });
-    Object.values(S.nodes).filter(n => inScope('nodes', n.id)).forEach(n => { const k = n.type.toUpperCase() + (n.ratio ? ' ' + n.ratio : ''); nod[k] = (nod[k] || 0) + 1; });
+    Object.values(S.nodes).filter(n => inScope('nodes', n.id)).forEach(n => { const k = (FT.NODE_TYPES[n.type] ? FT.NODE_TYPES[n.type].short : n.type.toUpperCase()) + (n.ratio ? ' ' + n.ratio : ''); nod[k] = (nod[k] || 0) + 1; });
     Object.entries(cab).forEach(([k, v]) => rows.push({ kind: 'cable', name: k, qty: v.n, len: v.len }));
     Object.entries(pip).forEach(([k, v]) => rows.push({ kind: 'pipe', name: k, qty: v.n, len: v.len }));
     Object.entries(nod).forEach(([k, v]) => rows.push({ kind: 'node', name: k, qty: v }));

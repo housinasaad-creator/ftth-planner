@@ -12,8 +12,8 @@
   N.clickBuilding = function (e, p) {
     const h = FT.T.hit(e); const id = h && h.kind === 'bld' ? h.id : FT.map.buildingAt(p); if (!id) { U().toast('Click a building'); return; }
     const o = FT.T.num; FT.commit();
-    if (e.originalEvent.shiftKey) { const b = ensure(id); delete b.num; delete b.pfx; FT.changed('num'); return; }
-    const b = ensure(id); b.num = o.next++; b.pfx = o.prefix || ''; FT.changed('num'); U().numChanged(); FT.T.select('bld', id);
+    if (e.originalEvent.shiftKey) { const had = (FT.state.bld[id] || {}).num; const re = FT.bedit.unnumber(id); if (had) U().toast((FT.lang === 'ar' ? 'أُزيل الرقم ' + had + ' · أُعيد ترقيم ' : 'Number ' + had + ' removed · renumbered ') + re); return; }
+    const b = ensure(id); b.num = o.next++; b.pfx = o.prefix || ''; const rg = FT.map.buildingRing(id) || b.fp; if (rg) b.ll = FT.centroid(rg); FT.changed('num'); U().numChanged(); FT.T.select('bld', id);
   };
   N.clickFloors = function (e, p) {
     const h = FT.T.hit(e); const id = h && h.kind === 'bld' ? h.id : FT.map.buildingAt(p); if (!id) return;
@@ -24,14 +24,14 @@
     FT.changed('bld'); FT.T.select('bld', id); U().toast(FT.t('toast_added'));
   };
   N.setProp = function (id, k, v) { FT.commit(); const b = ensure(id); if (v === '' || v == null || v === 0) delete b[k]; else b[k] = v; FT.changed('bld'); };
-  N.clear = function (id) { const b = FT.state.bld[id]; if (b) { FT.commit(); delete b.num; delete b.pfx; FT.changed('num'); } };
+  N.clear = function (id) { const b = FT.state.bld[id]; if (b && b.num) { const had = b.num, re = FT.bedit.unnumber(id); U().toast((FT.lang === 'ar' ? 'أُزيل الرقم ' + had + ' · أُعيد ترقيم ' : 'Number ' + had + ' removed · renumbered ') + re); } };
 
   // ---- automatic numbering inside an area ----
   N.autoNumber = function (ring) {
     FT.map.ensureTiles(FT.bboxOf(ring)).then(() => {
       const list = FT.map.buildingsInRing(ring); if (!list.length) { U().toast(FT.t('dxf_none')); return; }
       const o = FT.T.num, lat0 = ring[0][1], kx = Math.cos(lat0 * Math.PI / 180) * 111320, ky = 110540;
-      const P = list.map(b => ({ id: b.id, x: b.c[0] * kx, y: b.c[1] * ky }));
+      const P = list.map(b => ({ id: b.id, c: b.c, x: b.c[0] * kx, y: b.c[1] * ky }));
       const minX = Math.min(...P.map(p => p.x)), minY = Math.min(...P.map(p => p.y));
       let order = [];
       if (o.order === 'rows') {
@@ -46,7 +46,7 @@
           const dx = best.x - cur.x, dy = best.y - cur.y, d = Math.hypot(dx, dy) || 1; hx = dx / d; hy = dy / d; left.delete(best); order.push(best); cur = best;
         }
       }
-      FT.commit(); order.forEach(p => { const b = ensure(p.id); b.num = o.next++; b.pfx = o.prefix || ''; });
+      FT.commit(); order.forEach(p => { const b = ensure(p.id); b.num = o.next++; b.pfx = o.prefix || ''; b.ll = p.c; });
       FT.changed('num'); U().numChanged(); U().toast(FT.t('num_done') + ' ' + order.length + ' ' + FT.t('bld_n'));
     });
   };

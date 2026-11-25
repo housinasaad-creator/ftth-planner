@@ -22,13 +22,19 @@
     const col = FT.NODE_TYPES[type] ? FT.NODE_TYPES[type].color : '#9aa1b6';
     g.translate(s / 2, s / 2); g.lineJoin = 'round'; g.lineCap = 'round';
     const ring = (r, fill, stroke, lw) => { g.beginPath(); g.arc(0, 0, r, 0, 7); g.fillStyle = fill; g.fill(); g.lineWidth = lw; g.strokeStyle = stroke; g.stroke(); };
-    const badge = txt => { ring(s * 0.4, col, '#07090d', s * 0.06); g.fillStyle = '#07090d'; g.font = '800 ' + s * 0.3 + 'px IBM Plex Sans Arabic, Arial'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(txt, 0, s * 0.02); };
+    const badge = txt => { ring(s * 0.42, col, '#07090d', s * 0.06); g.fillStyle = '#07090d'; g.font = '800 ' + s * (txt.length > 3 ? 0.22 : txt.length > 2 ? 0.26 : 0.3) + 'px IBM Plex Sans Arabic, Arial'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(txt, 0, s * 0.02); };
     if (type === 'olt') { // rack unit: rounded box with 3 slots and LEDs
       g.fillStyle = col; g.strokeStyle = '#07090d'; g.lineWidth = s * 0.06; const w = s * 0.7, h = s * 0.74; g.beginPath(); g.roundRect(-w / 2, -h / 2, w, h, s * 0.12); g.fill(); g.stroke();
       g.fillStyle = '#07090d'; for (let i = -1; i <= 1; i++) { g.beginPath(); g.roundRect(-w * 0.36, i * h * 0.26 - h * 0.08, w * 0.72, h * 0.16, s * 0.03); g.fill(); }
       g.fillStyle = '#eafff4'; for (let i = -1; i <= 1; i++) { g.beginPath(); g.arc(w * 0.24, i * h * 0.26, s * 0.03, 0, 7); g.fill(); }
-    } else if (type === 'sk') badge('SK'); else if (type === 'dk') badge('DK'); else if (type === 'bk') badge('BK');
+    } else if (type === 'sk') badge('FDC'); else if (type === 'dk') badge('iFDC'); else if (type === 'bk') badge('FDB');
     else if (type === 'mh') { ring(s * 0.36, '#171b25', col, s * 0.07); g.strokeStyle = col; g.lineWidth = s * 0.06; g.beginPath(); g.moveTo(-s * 0.2, 0); g.lineTo(s * 0.2, 0); g.moveTo(0, -s * 0.2); g.lineTo(0, s * 0.2); g.stroke(); }
+    else if (type === 'hh') { g.fillStyle = '#171b25'; g.strokeStyle = col; g.lineWidth = s * 0.07; g.beginPath(); g.roundRect(-s * 0.27, -s * 0.27, s * 0.54, s * 0.54, s * 0.08); g.fill(); g.stroke(); g.beginPath(); g.moveTo(-s * 0.13, 0); g.lineTo(s * 0.13, 0); g.stroke(); }
+    else if (type === 'edgeh' || type === 'moveh') { // edit handles: coral disc with arrows (pointing up; rotated on the map)
+      ring(s * 0.4, type === 'edgeh' ? '#ff6a3d' : '#ffffff', '#07090d', s * 0.06); g.strokeStyle = type === 'edgeh' ? '#ffffff' : '#07090d'; g.fillStyle = g.strokeStyle; g.lineWidth = s * 0.07;
+      const ar = (dx, dy) => { g.save(); g.rotate(Math.atan2(dx, -dy)); g.beginPath(); g.moveTo(0, -s * 0.27); g.lineTo(s * 0.11, -s * 0.12); g.lineTo(-s * 0.11, -s * 0.12); g.closePath(); g.fill(); g.restore(); };
+      if (type === 'edgeh') { g.beginPath(); g.moveTo(0, -s * 0.18); g.lineTo(0, s * 0.18); g.stroke(); ar(0, -1); ar(0, 1); } else { g.beginPath(); g.moveTo(0, -s * 0.18); g.lineTo(0, s * 0.18); g.moveTo(-s * 0.18, 0); g.lineTo(s * 0.18, 0); g.stroke(); ar(0, -1); ar(0, 1); ar(1, 0); ar(-1, 0); }
+    }
     else if (type === 'pole') { g.strokeStyle = '#07090d'; g.lineWidth = s * 0.2; g.beginPath(); g.moveTo(0, s * 0.4); g.lineTo(0, -s * 0.38); g.moveTo(-s * 0.3, -s * 0.22); g.lineTo(s * 0.3, -s * 0.22); g.stroke(); g.strokeStyle = col; g.lineWidth = s * 0.1; g.beginPath(); g.moveTo(0, s * 0.38); g.lineTo(0, -s * 0.36); g.moveTo(-s * 0.28, -s * 0.22); g.lineTo(s * 0.28, -s * 0.22); g.stroke(); }
     else if (type === 'splice') { ring(s * 0.3, '#ff6a3d', '#07090d', s * 0.06); g.strokeStyle = '#07090d'; g.lineWidth = s * 0.06; g.beginPath(); g.moveTo(-s * 0.16, -s * 0.16); g.lineTo(s * 0.16, s * 0.16); g.moveTo(s * 0.16, -s * 0.16); g.lineTo(-s * 0.16, s * 0.16); g.stroke(); }
     else if (type === 'sub') { ring(s * 0.28, '#7ad7ff', '#07090d', s * 0.06); }
@@ -78,10 +84,10 @@
     map.addLayer({ id: 'hov-fill', type: 'fill', source: 'hov', paint: { 'fill-color': '#ff6a3d', 'fill-opacity': 0.22 } });
     map.addLayer({ id: 'hov-line', type: 'line', source: 'hov', paint: { 'line-color': '#ff6a3d', 'line-width': 2.2 } });
     // network
-    ['pipes', 'cables', 'nodes', 'draw', 'sel', 'wd', 'wl', 'imp'].forEach(s => map.addSource(s, { type: 'geojson', data: EMPTY, promoteId: 'id' }));
+    ['pipes', 'cables', 'nodes', 'draw', 'sel', 'wd', 'wl', 'imp', 'impv', 'bh'].forEach(s => map.addSource(s, { type: 'geojson', data: EMPTY, promoteId: 'id' }));
     map.addLayer({ id: 'pipes-case', type: 'line', source: 'pipes', paint: { 'line-color': '#07090d', 'line-width': ['interpolate', ['linear'], ['zoom'], 10, 3, 18, 8], 'line-opacity': 0.55 } });
-    map.addLayer({ id: 'pipes', type: 'line', source: 'pipes', paint: { 'line-color': ['coalesce', ['get', 'color'], '#2aa8ff'], 'line-width': ['interpolate', ['linear'], ['zoom'], 10, 1.6, 18, 5], 'line-dasharray': ['case', ['==', ['get', 'aerial'], 1], ['literal', [2, 1.5]], ['literal', [1, 0]]] } });
-    map.addLayer({ id: 'cables', type: 'line', source: 'cables', layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': ['get', 'color'], 'line-width': ['interpolate', ['linear'], ['zoom'], 10, 1.4, 18, 3.6], 'line-offset': ['interpolate', ['linear'], ['zoom'], 10, 0, 18, 4] } });
+    map.addLayer({ id: 'pipes', type: 'line', source: 'pipes', layout: { 'line-sort-key': ['coalesce', ['get', 'z'], 0] }, paint: { 'line-color': ['coalesce', ['get', 'color'], '#2aa8ff'], 'line-width': ['interpolate', ['linear'], ['zoom'], 10, 1.6, 18, 5], 'line-dasharray': ['case', ['==', ['get', 'aerial'], 1], ['literal', [2, 1.5]], ['literal', [1, 0]]] } });
+    map.addLayer({ id: 'cables', type: 'line', source: 'cables', layout: { 'line-cap': 'round', 'line-join': 'round', 'line-sort-key': ['coalesce', ['get', 'z'], 0] }, paint: { 'line-color': ['get', 'color'], 'line-width': ['interpolate', ['linear'], ['zoom'], 10, 1.4, 18, 3.6], 'line-offset': ['interpolate', ['linear'], ['zoom'], 10, 0, 18, 4] } });
     map.addLayer({ id: 'imp-fill', type: 'fill', source: 'imp', filter: ['==', ['geometry-type'], 'Polygon'], paint: { 'fill-color': '#3bd18b', 'fill-opacity': 0.18 } });
     map.addLayer({ id: 'imp-line', type: 'line', source: 'imp', filter: ['any', ['==', ['geometry-type'], 'LineString'], ['==', ['geometry-type'], 'Polygon']], paint: { 'line-color': '#7ad7ff', 'line-width': 2 } });
     map.addLayer({ id: 'imp-pt', type: 'circle', source: 'imp', filter: ['==', ['geometry-type'], 'Point'], paint: { 'circle-radius': 5, 'circle-color': '#7ad7ff', 'circle-stroke-color': '#07090d', 'circle-stroke-width': 1.5 } });
@@ -91,11 +97,15 @@
     map.addLayer({ id: 'draw-fill', type: 'fill', source: 'draw', filter: ['==', ['geometry-type'], 'Polygon'], paint: { 'fill-color': '#ff6a3d', 'fill-opacity': 0.14 } });
     map.addLayer({ id: 'draw-poly-line', type: 'line', source: 'draw', filter: ['==', ['geometry-type'], 'Polygon'], paint: { 'line-color': '#ff8a62', 'line-width': 2.5, 'line-dasharray': [3, 2] } });
     map.addLayer({ id: 'draw-pt', type: 'circle', source: 'draw', filter: ['==', ['geometry-type'], 'Point'], paint: { 'circle-radius': 5, 'circle-color': '#ffd24a', 'circle-stroke-color': '#07090d', 'circle-stroke-width': 2 } });
-    ['olt', 'sk', 'dk', 'bk', 'mh', 'pole', 'splice', 'sub', 'ap', 'cpe', 'ptp'].forEach(t => map.addImage('i-' + t, icon(t), { pixelRatio: 2 }));
-    map.addLayer({ id: 'wdev', type: 'symbol', source: 'wd', layout: { 'icon-image': ['concat', 'i-', ['get', 'type']], 'icon-size': ['interpolate', ['linear'], ['zoom'], 9, 0.5, 14, 0.8, 19, 1.15], 'icon-allow-overlap': true, 'text-field': ['step', ['zoom'], '', 15.5, ['get', 'name']], 'text-font': ['Noto Sans Bold'], 'text-size': 11, 'text-offset': [0, 1.5], 'text-optional': true }, paint: { 'text-color': '#07090d', 'text-halo-color': '#ffffff', 'text-halo-width': 1.6 } });
-    map.addLayer({ id: 'nodes', type: 'symbol', source: 'nodes', layout: { 'icon-image': ['concat', 'i-', ['get', 'type']], 'icon-size': ['interpolate', ['linear'], ['zoom'], 9, 0.5, 14, 0.8, 19, 1.15], 'icon-allow-overlap': true, 'icon-ignore-placement': true,
-      'text-field': ['step', ['zoom'], '', 15.5, ['get', 'name']], 'text-font': ['Noto Sans Bold'], 'text-size': 11, 'text-offset': [0, 1.5], 'text-optional': true }, paint: { 'text-color': '#07090d', 'text-halo-color': '#ffffff', 'text-halo-width': 1.6 } });
-    map.addLayer({ id: 'nodes-sel', type: 'circle', source: 'sel', filter: ['==', ['geometry-type'], 'Point'], paint: { 'circle-radius': 20, 'circle-color': 'rgba(255,255,255,0)', 'circle-stroke-color': '#ffffff', 'circle-stroke-width': 3 } });
+    ['olt', 'sk', 'dk', 'bk', 'mh', 'hh', 'pole', 'splice', 'sub', 'ap', 'cpe', 'ptp', 'edgeh', 'moveh'].forEach(t => map.addImage('i-' + t, icon(t), { pixelRatio: 2 }));
+    map.addLayer({ id: 'wdev', type: 'symbol', source: 'wd', layout: { 'icon-image': ['concat', 'i-', ['get', 'type']], 'icon-size': ['interpolate', ['linear'], ['zoom'], 9, 0.24, 14, 0.36, 17, 0.46, 19, 0.58], 'icon-allow-overlap': true, 'text-field': ['step', ['zoom'], '', 15.5, ['get', 'name']], 'text-font': ['Noto Sans Bold'], 'text-size': 10, 'text-offset': [0, 1.3], 'text-optional': true }, paint: { 'text-color': '#07090d', 'text-halo-color': '#ffffff', 'text-halo-width': 1.6 } });
+    map.addLayer({ id: 'nodes', type: 'symbol', source: 'nodes', layout: { 'symbol-sort-key': ['coalesce', ['get', 'z'], 0], 'icon-image': ['concat', 'i-', ['get', 'type']], 'icon-size': ['interpolate', ['linear'], ['zoom'], 9, 0.24, 14, 0.36, 17, 0.46, 19, 0.58], 'icon-allow-overlap': true, 'icon-ignore-placement': true,
+      'text-field': ['step', ['zoom'], '', 15.5, ['coalesce', ['get', 'lab'], ['get', 'name']]], 'text-font': ['Noto Sans Bold'], 'text-size': 10, 'text-offset': [0, 1.3], 'text-optional': true }, paint: { 'text-color': '#07090d', 'text-halo-color': '#ffffff', 'text-halo-width': 1.6 } });
+    map.addLayer({ id: 'nodes-sel', type: 'circle', source: 'sel', filter: ['==', ['geometry-type'], 'Point'], paint: { 'circle-radius': 13, 'circle-color': 'rgba(255,255,255,0)', 'circle-stroke-color': '#ffffff', 'circle-stroke-width': 3 } });
+    map.addLayer({ id: 'impv-pt', type: 'circle', source: 'impv', paint: { 'circle-radius': 5.5, 'circle-color': '#ffffff', 'circle-stroke-color': '#ff6a3d', 'circle-stroke-width': 2 } });
+    map.addLayer({ id: 'bh-box', type: 'line', source: 'bh', filter: ['==', ['geometry-type'], 'LineString'], paint: { 'line-color': '#ffffff', 'line-width': 1.6, 'line-dasharray': [2, 2] } });
+    map.addLayer({ id: 'bh-vtx', type: 'circle', source: 'bh', filter: ['==', ['get', 'k'], 'vtx'], paint: { 'circle-radius': 4.5, 'circle-color': '#ffffff', 'circle-stroke-color': '#07090d', 'circle-stroke-width': 1.5 } });
+    map.addLayer({ id: 'bh-pt', type: 'symbol', source: 'bh', filter: ['any', ['==', ['get', 'k'], 'edge'], ['==', ['get', 'k'], 'move']], layout: { 'icon-image': ['concat', 'i-', ['get', 'k'], 'h'], 'icon-size': 0.5, 'icon-rotate': ['coalesce', ['get', 'rot'], 0], 'icon-rotation-alignment': 'map', 'icon-allow-overlap': true, 'icon-ignore-placement': true } });
     map.on('moveend', M.scheduleBuildings); map.on('zoomend', M.scheduleBuildings);
     M.ready = true; M.scheduleBuildings(); M.renderNet();
     FT.onChange(() => M.renderNet());
@@ -119,7 +129,7 @@
   M.setBase = function (kind) {
     map.setLayoutProperty('sat', 'visibility', kind === 'sat' ? 'visible' : 'none');
     const vis = kind === 'sat' ? 'none' : 'visible';
-    map.getStyle().layers.forEach(l => { if (l.id === 'sat' || /^(mask|gov-line|bld|hov|pipes|cables|nodes|sel|draw)/.test(l.id)) return; if (l.type === 'background') return; if (l.type === 'symbol' && kind === 'sat') map.setLayoutProperty(l.id, 'visibility', 'visible'); else if (l.type !== 'symbol') map.setLayoutProperty(l.id, 'visibility', vis); });
+    map.getStyle().layers.forEach(l => { if (l.id === 'sat' || /^(mask|gov-line|bld|hov|pipes|cables|nodes|sel|draw|imp|wl|wdev|bh)/.test(l.id)) return; if (l.type === 'background') return; if (l.type === 'symbol' && kind === 'sat') map.setLayoutProperty(l.id, 'visibility', 'visible'); else if (l.type !== 'symbol') map.setLayoutProperty(l.id, 'visibility', vis); });
     map.easeTo({ pitch: kind === '3d' ? 58 : 0, duration: 600 });
     M.base = kind; M.applyBldHidden();
   };
@@ -154,11 +164,12 @@
     for (let x = x0; x <= x1; x++) for (let y = y0; y <= y1; y++) {
       const t = tileCache[x + '/' + y]; if (!t) continue;
       for (const [id, h, flat] of t) {
+        if (over[id] && over[id].fp) continue; // edited footprint: drawn from the override below
         const ring = []; for (let i = 0; i < flat.length; i += 2) ring.push([flat[i] / 1e6, flat[i + 1] / 1e6]); ring.push(ring[0]);
         push(id, h, ring);
       }
     }
-    Object.keys(over).forEach(id => { const o = over[id]; if (o.fp && o.fp[0][0] > W && o.fp[0][0] < E && o.fp[0][1] > S0 && o.fp[0][1] < N0) push(id, 0, o.fp.concat([o.fp[0]])); }); // manually drawn buildings
+    Object.keys(over).forEach(id => { const o = over[id]; if (o.fp && !o.deleted && o.fp[0][0] > W && o.fp[0][0] < E && o.fp[0][1] > S0 && o.fp[0][1] < N0) push(id, 0, o.fp.concat([o.fp[0]])); }); // manually drawn buildings
     M.bldFeats = feats; map.getSource('bld').setData({ type: 'FeatureCollection', features: feats });
   };
   M.buildingAt = function (ll) { // footprint under a lon/lat (from loaded tiles)
@@ -180,23 +191,24 @@
     for (let x = x0; x <= x1; x++) for (let y = y0; y <= y1; y++) {
       const t = tileCache[x + '/' + y]; if (!t) continue;
       for (const [id, h, flat] of t) {
-        if ((over[id] || {}).deleted) continue;
+        if ((over[id] || {}).deleted || (over[id] || {}).fp) continue;
         const r = []; for (let i = 0; i < flat.length; i += 2) r.push([flat[i] / 1e6, flat[i + 1] / 1e6]); const c = FT.centroid(r);
         if (FT.pointInRing(c, ring)) out.push({ id, c, ring: r, h, o: over[id] || {} });
       }
     }
-    Object.keys(over).forEach(id => { const o = over[id]; if (o.fp) { const c = FT.centroid(o.fp); if (FT.pointInRing(c, ring)) out.push({ id, c, ring: o.fp, h: 0, o }); } });
+    Object.keys(over).forEach(id => { const o = over[id]; if (o.fp && !o.deleted) { const c = FT.centroid(o.fp); if (FT.pointInRing(c, ring)) out.push({ id, c, ring: o.fp, h: 0, o }); } });
     return out;
   };
   M.setBuildingSelection = set => { M.selB = set; M.rebuildBuildingData(); };
 
   // ---------------- network render ----------------
-  const CABLE_COL = { Backbone: '#b57bff', Distribution: '#35e0c9', Drop: '#d4ff4a' };
+  const CABLE_COL = { Backbone: '#b57bff', Feeder: '#b57bff', Distribution: '#35e0c9', Drop: '#d4ff4a' };
   M.renderNet = function () {
     if (!M.ready) return; const S = FT.state;
-    map.getSource('nodes').setData({ type: 'FeatureCollection', features: Object.values(S.nodes).map(n => ({ type: 'Feature', id: n.id, properties: { id: n.id, type: n.type, name: n.name }, geometry: { type: 'Point', coordinates: n.ll } })).concat(Object.values(S.splices).map(sp => { const n = S.nodes[sp.node]; return n ? { type: 'Feature', id: sp.id, properties: { id: sp.id, type: 'splice', name: sp.label || '' }, geometry: { type: 'Point', coordinates: [n.ll[0] + 0.00003, n.ll[1] + 0.00003] } } : null; }).filter(Boolean)) });
-    map.getSource('pipes').setData({ type: 'FeatureCollection', features: Object.values(S.pipes).map(p => ({ type: 'Feature', id: p.id, properties: { id: p.id, color: p.color || null, aerial: p.ptype === 'aerial' ? 1 : 0 }, geometry: { type: 'LineString', coordinates: p.pts } })) });
-    map.getSource('cables').setData({ type: 'FeatureCollection', features: Object.values(S.cables).map(c => { const pts = [].concat(...FT.cableSpans(c).map((s, i) => i ? s.pts.slice(1) : s.pts)); const g = (FT.CABLE_CAT.find(x => x.id === c.cat) || {}).group || 'Backbone'; return { type: 'Feature', id: c.id, properties: { id: c.id, color: c.color || CABLE_COL[g] }, geometry: { type: 'LineString', coordinates: pts.length > 1 ? pts : (c.pts || []) } }; }) });
+    const zN = FT.zOrder('nodes'), zP = FT.zOrder('pipes'), zC = FT.zOrder('cables');
+    map.getSource('nodes').setData({ type: 'FeatureCollection', features: Object.values(S.nodes).map(n => ({ type: 'Feature', id: n.id, properties: { id: n.id, type: n.type, name: n.name, lab: n.name.replace(/^(F\d+)-(PS\d+)-(P\d+)-D\d+-FDB\d+$/, '$1·$2·$3'), z: zN[n.id] || 0 }, geometry: { type: 'Point', coordinates: n.ll } })).concat(Object.values(S.splices).map(sp => { const n = S.nodes[sp.node]; return n ? { type: 'Feature', id: sp.id, properties: { id: sp.id, type: 'splice', name: sp.label || '' }, geometry: { type: 'Point', coordinates: [n.ll[0] + 0.00003, n.ll[1] + 0.00003] } } : null; }).filter(Boolean)) });
+    map.getSource('pipes').setData({ type: 'FeatureCollection', features: Object.values(S.pipes).map(p => ({ type: 'Feature', id: p.id, properties: { id: p.id, z: zP[p.id] || 0, color: p.color || null, aerial: p.ptype === 'aerial' ? 1 : 0 }, geometry: { type: 'LineString', coordinates: p.pts } })) });
+    map.getSource('cables').setData({ type: 'FeatureCollection', features: Object.values(S.cables).map(c => { const pts = [].concat(...FT.cableSpans(c).map((s, i) => i ? s.pts.slice(1) : s.pts)); const g = (FT.CABLE_CAT.find(x => x.id === c.cat) || {}).group || 'Feeder'; return { type: 'Feature', id: c.id, properties: { id: c.id, z: zC[c.id] || 0, color: c.color || CABLE_COL[g] }, geometry: { type: 'LineString', coordinates: pts.length > 1 ? pts : (c.pts || []) } }; }) });
     if (FT.wl) FT.wl.render();
     if (FT.imp) FT.imp.render();
     M.rebuildBuildingData && M.bldFeats && M.rebuildBuildingData();
@@ -210,6 +222,8 @@
     if (kind === 'cable' && S.cables[id]) { const pts = [].concat(...FT.cableSpans(S.cables[id]).map((s, i) => i ? s.pts.slice(1) : s.pts)); f = [{ type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: pts } }]; }
     map.getSource('sel').setData({ type: 'FeatureCollection', features: f });
   };
+  M.setBH = function (features) { M.bhData = features || []; if (M.ready) map.getSource('bh').setData({ type: 'FeatureCollection', features: features || [] }); };
+  M.setImpVerts = function (features) { M.impvData = features || []; if (M.ready) map.getSource('impv').setData({ type: 'FeatureCollection', features: features || [] }); };
   M.setDraw = function (features) { map.getSource('draw').setData({ type: 'FeatureCollection', features: features || [] }); };
   M.flyTo = (ll, z) => map.flyTo({ center: ll, zoom: z || Math.max(map.getZoom(), 17), duration: 700 });
   M.fitBBox = bb => map.fitBounds([[bb[0], bb[1]], [bb[2], bb[3]]], { padding: 80, maxZoom: 18.5, duration: 700 });

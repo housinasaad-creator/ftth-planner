@@ -52,12 +52,65 @@
     flush(); return feats;
   };
 
+  // Multi* geometries are split into single parts so every part can be edited vertex by vertex
+  function normalize(feats) {
+    const out = [];
+    feats.forEach(f => {
+      const g = f.geometry; if (!g) return;
+      if (g.type === 'MultiPoint') g.coordinates.forEach(c => out.push({ type: 'Feature', properties: f.properties, geometry: { type: 'Point', coordinates: c.slice(0, 2) } }));
+      else if (g.type === 'MultiLineString') g.coordinates.forEach(c => out.push({ type: 'Feature', properties: f.properties, geometry: { type: 'LineString', coordinates: c.map(q => q.slice(0, 2)) } }));
+      else if (g.type === 'MultiPolygon') g.coordinates.forEach(c => out.push({ type: 'Feature', properties: f.properties, geometry: { type: 'Polygon', coordinates: c.map(r => r.map(q => q.slice(0, 2))) } }));
+      else if (g.type === 'Point') out.push({ type: 'Feature', properties: f.properties, geometry: { type: 'Point', coordinates: g.coordinates.slice(0, 2) } });
+      else if (g.type === 'LineString') out.push({ type: 'Feature', properties: f.properties, geometry: { type: 'LineString', coordinates: g.coordinates.map(q => q.slice(0, 2)) } });
+      else if (g.type === 'Polygon') out.push({ type: 'Feature', properties: f.properties, geometry: { type: 'Polygon', coordinates: g.coordinates.map(r => r.map(q => q.slice(0, 2))) } });
+    });
+    return out;
+  }
   I.add = function (name, feats) {
+    feats = normalize(feats);
     if (!feats.length) { U().toast('Nothing to import'); return; } const S = FT.state; S.imports = S.imports || {}; FT.commit();
     const id = FT.uid('i'); feats.forEach((f, k) => { f.properties = Object.assign({}, f.properties, { imp: id }); }); S.imports[id] = { id, name, features: feats.slice(0, 40000) };
-    FT.changed('import'); FT.map.fitBBox(FT.bboxOf([].concat(...feats.slice(0, 2000).map(f => f.geometry.type === 'Point' ? [f.geometry.coordinates] : f.geometry.type === 'LineString' ? f.geometry.coordinates : f.geometry.coordinates[0])))); U().toast(name + ' · ' + feats.length);
+    FT.changed('import'); I.unlocked.delete(id); FT.map.fitBBox(FT.bboxOf([].concat(...feats.slice(0, 2000).map(f => f.geometry.type === 'Point' ? [f.geometry.coordinates] : f.geometry.type === 'LineString' ? f.geometry.coordinates : f.geometry.coordinates[0])))); U().toast(name + ' · ' + feats.length + ' — ' + (FT.lang === 'ar' ? 'الملف مقفل: اضغط 🔒 في الشجرة لفكّه وتعديل النقاط' : 'file is locked: press 🔒 in the tree to unlock and edit its points'));
   };
-  I.render = function () { const M = FT.map; if (!M.ready) return; const all = []; Object.values(FT.state.imports || {}).forEach(g => { if (!FT.T.hidden.has(g.id)) g.features.forEach(f => all.push(f)); }); M.map.getSource('imp').setData({ type: 'FeatureCollection', features: all }); };
+  I.render = function () {
+    const M = FT.map; if (!M.ready) return; const all = [];
+    Object.values(FT.state.imports || {}).forEach(g => { if (!FT.T.hidden.has(g.id)) g.features.forEach((f, fi) => { f.properties = f.properties || {}; f.properties.imp = g.id; f.properties.fi = fi; all.push(f); }); });
+    M.map.getSource('imp').setData({ type: 'FeatureCollection', features: all }); I.renderHandles();
+  };
+
+  // ---- lock / unlock + single-vertex editing ----
+  I.unlocked = new Set(); // runtime only: every file is locked again when the project is reopened
+  I.isLocked = id => !I.unlocked.has(id);
+  I.setLocked = function (id, lock) { lock ? I.unlocked.delete(id) : I.unlocked.add(id); I.renderHandles(); FT.UI.refreshTree(); U().toast(lock ? (FT.lang === 'ar' ? 'تم القفل' : 'Locked') : (FT.lang === 'ar' ? 'مفتوح — اسحب أي نقطة لتحريكها · انقر مرتين على خط لإضافة نقطة · Shift+نقرة على نقطة لحذفها' : 'Unlocked — drag any point · double-click a line to add a point · Shift+click a point to delete it')); };
+  const ringsOf = g => g.type === 'Point' ? [[g.coordinates]] : g.type === 'LineString' ? [g.coordinates] : g.coordinates;
+  const closed = (r) => r.length > 2 && r[0][0] === r[r.length - 1][0] && r[0][1] === r[r.length - 1][1];
+  I.renderHandles = function () {
+    const M = FT.map; if (!M.ready) return; const out = []; let n = 0;
+    if (I.unlocked.size) {
+      const b = M.map.getBounds(), pad = 0.0008, W = b.getWest() - pad, E = b.getEast() + pad, S0 = b.getSouth() - pad, N0 = b.getNorth() + pad;
+      I.unlocked.forEach(gid => { const g = (FT.state.imports || {})[gid]; if (!g || FT.T.hidden.has(gid)) return;
+        g.features.forEach((f, fi) => ringsOf(f.geometry).forEach((r, ri) => { const cl = f.geometry.type === 'Polygon' && closed(r); r.forEach((c, i) => { if (cl && i === r.length - 1) return; if (c[0] < W || c[0] > E || c[1] < S0 || c[1] > N0 || n >= 6000) return; n++; out.push({ type: 'Feature', id: gid + '|' + fi + '|' + ri + '|' + i, properties: { id: gid + '|' + fi + '|' + ri + '|' + i, g: gid, f: fi, r: ri, i }, geometry: { type: 'Point', coordinates: c } }); }); }));
+      });
+    }
+    M.setImpVerts(out);
+  };
+  I.moveVertex = function (v, ll) { // v = { g, f, r, i }
+    const f = FT.state.imports[v.g].features[v.f], r = ringsOf(f.geometry)[v.r]; if (!r) return; r[v.i] = ll.slice();
+    if (f.geometry.type === 'Polygon' && closed(r) === false && v.i === 0 && r.length > 2) { /* open ring: nothing to keep in sync */ }
+    if (f.geometry.type === 'Polygon' && v.i === 0 && r.length > 3) r[r.length - 1] = ll.slice(); // the closing vertex follows the first one
+  };
+  I.deleteVertex = function (v) {
+    const g = FT.state.imports[v.g]; if (!g) return false; const f = g.features[v.f], r = ringsOf(f.geometry)[v.r]; if (!r) return false;
+    if (f.geometry.type === 'Point') { FT.commit(); g.features.splice(v.f, 1); FT.changed('import'); return true; }
+    const cl = f.geometry.type === 'Polygon' && closed(r), min = f.geometry.type === 'Polygon' ? (cl ? 4 : 3) : 2;
+    if (r.length <= min) { U().toast(FT.lang === 'ar' ? 'لا يمكن حذف المزيد: هذا أقل عدد نقاط' : 'Cannot delete: minimum number of points'); return false; }
+    FT.commit(); r.splice(v.i, 1); if (cl && v.i === 0) r[r.length - 1] = r[0].slice(); FT.changed('import'); return true;
+  };
+  I.insertVertex = function (gid, fi, ll) { // add a vertex on the nearest segment of the feature
+    const g = FT.state.imports[gid]; if (!g) return false; const f = g.features[fi]; if (!f || f.geometry.type === 'Point') return false;
+    let best = null; ringsOf(f.geometry).forEach((r, ri) => { const np = FT.nearestOnPath(ll, r); if (!best || np.d < best.d) best = { d: np.d, ri, i: np.i, pt: np.pt }; });
+    if (!best || best.d > 15) return false; FT.commit(); ringsOf(f.geometry)[best.ri].splice(best.i, 0, best.pt); FT.changed('import'); return true;
+  };
   I.file = async function (f, crs) {
     const n = f.name.toLowerCase();
     try {
