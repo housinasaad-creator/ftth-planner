@@ -72,16 +72,16 @@
     map.addSource('sat', { type: 'raster', tiles: ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'], tileSize: 256, maxzoom: 19, attribution: 'Imagery © Esri' });
     map.addLayer({ id: 'sat', type: 'raster', source: 'sat', layout: { visibility: 'none' } }, M.firstBaseLayerAbove());
     // buildings
-    map.addSource('bld', { type: 'geojson', data: EMPTY });
+    map.addSource('bld', { type: 'geojson', data: EMPTY, promoteId: 'id' });
     map.addLayer({ id: 'bld-3d', type: 'fill-extrusion', source: 'bld', minzoom: 14, paint: {
-      'fill-extrusion-color': ['case', ['==', ['get', 'sel'], 1], '#ff8a62', ['>', ['get', 'num'], 0], '#f2b28c', ['==', ['get', 'st'], 1], '#7ad7ff', '#d9d4cb'],
+      'fill-extrusion-color': ['case', ['boolean', ['feature-state', 'sel'], false], '#ff8a62', ['>', ['get', 'num'], 0], '#f2b28c', ['==', ['get', 'st'], 1], '#7ad7ff', '#d9d4cb'],
       'fill-extrusion-height': ['get', 'eh'], 'fill-extrusion-base': 0, 'fill-extrusion-opacity': 0.94, 'fill-extrusion-vertical-gradient': true } }, firstSymbol);
     map.addLayer({ id: 'bld-num', type: 'symbol', source: 'bld', minzoom: 15.5, filter: ['>', ['get', 'num'], 0],
       layout: { 'text-field': ['get', 'lab'], 'text-font': ['Noto Sans Bold'], 'text-size': ['interpolate', ['linear'], ['zoom'], 15.5, 10, 19, 18], 'text-allow-overlap': true, 'text-pitch-alignment': 'viewport' },
       paint: { 'text-color': '#07090d', 'text-halo-color': '#fff6ee', 'text-halo-width': 2 } });
     // hide-the-drawing mode (satellite only): buildings invisible but still live (hover outline, click, numbers)
     map.addSource('hov', { type: 'geojson', data: EMPTY });
-    map.addLayer({ id: 'bld-out', type: 'line', source: 'bld', minzoom: 15, layout: { visibility: 'none' }, filter: ['any', ['>', ['get', 'num'], 0], ['==', ['get', 'st'], 1], ['==', ['get', 'sel'], 1]], paint: { 'line-color': '#ff8a62', 'line-width': 1.4, 'line-opacity': 0.9 } });
+    map.addLayer({ id: 'bld-out', type: 'line', source: 'bld', minzoom: 15, layout: { visibility: 'none' }, filter: ['any', ['>', ['get', 'num'], 0], ['==', ['get', 'st'], 1]], paint: { 'line-color': '#ff8a62', 'line-width': 1.4, 'line-opacity': 0.9 } });
     map.addLayer({ id: 'hov-fill', type: 'fill', source: 'hov', paint: { 'fill-color': '#ff6a3d', 'fill-opacity': 0.22 } });
     map.addLayer({ id: 'hov-line', type: 'line', source: 'hov', paint: { 'line-color': '#ff6a3d', 'line-width': 2.2 } });
     // network
@@ -109,7 +109,7 @@
     map.addLayer({ id: 'bh-pt', type: 'symbol', source: 'bh', filter: ['any', ['==', ['get', 'k'], 'edge'], ['==', ['get', 'k'], 'move']], layout: { 'icon-image': ['concat', 'i-', ['get', 'k'], 'h'], 'icon-size': 0.5, 'icon-rotate': ['coalesce', ['get', 'rot'], 0], 'icon-rotation-alignment': 'map', 'icon-allow-overlap': true, 'icon-ignore-placement': true } });
     map.on('moveend', M.scheduleBuildings); map.on('zoomend', M.scheduleBuildings);
     M.ready = true; M.scheduleBuildings(); M.renderNet();
-    FT.onChange(() => M.renderNet());
+    FT.onChange(why => M.renderNet(why));
     return map;
   };
   M.firstBaseLayerAbove = () => { const l = map.getStyle().layers.find(x => x.type === 'line' || x.type === 'symbol'); return l && l.id; };
@@ -155,12 +155,12 @@
   };
   M.rebuildBuildingData = function (x0, x1, y0, y1) {
     if (x0 == null) { const b = map.getBounds(); x0 = tx(b.getWest()); x1 = tx(b.getEast()); y0 = ty(b.getNorth()); y1 = ty(b.getSouth()); }
-    const feats = [], over = FT.state.bld || {}, selSet = M.selB || new Set();
+    const feats = [], over = FT.state.bld || {};
     const bb = map.getBounds(), W = bb.getWest() - 0.002, E = bb.getEast() + 0.002, S0 = bb.getSouth() - 0.002, N0 = bb.getNorth() + 0.002;
     const push = (id, h, ring) => {
       const o = over[id] || {}; if (o.deleted) return;
       const fl = o.floors || 0, eh = fl ? fl * 3.2 : (h > 0 ? h : 6.4);
-      feats.push({ type: 'Feature', id: feats.length, properties: { id, eh, h, fl, num: o.num || 0, lab: FT.num ? FT.num.label(o) : '', st: o.st || 0, sel: selSet.has(id) ? 1 : 0 }, geometry: { type: 'Polygon', coordinates: [ring] } });
+      feats.push({ type: 'Feature', id: feats.length, properties: { id, eh, h, fl, num: o.num || 0, lab: FT.num ? FT.num.label(o) : '', st: o.st || 0 }, geometry: { type: 'Polygon', coordinates: [ring] } });
     };
     for (let x = x0; x <= x1; x++) for (let y = y0; y <= y1; y++) {
       const t = tileCache[x + '/' + y]; if (!t) continue;
@@ -200,19 +200,30 @@
     Object.keys(over).forEach(id => { const o = over[id]; if (o.fp && !o.deleted) { const c = FT.centroid(o.fp); if (FT.pointInRing(c, ring)) out.push({ id, c, ring: o.fp, h: 0, o }); } });
     return out;
   };
-  M.setBuildingSelection = set => { M.selB = set; M.rebuildBuildingData(); };
+  // selection is a feature-state: no GeoJSON reload when you click a building (that reload froze big projects)
+  M.setBuildingSelection = set => {
+    const prev = M._selIds || new Set(); set = new Set(set); if (!M.ready) { M._selIds = set; return; }
+    prev.forEach(id => { if (!set.has(id)) map.setFeatureState({ source: 'bld', id }, { sel: false }); });
+    set.forEach(id => { if (!prev.has(id)) map.setFeatureState({ source: 'bld', id }, { sel: true }); });
+    M._selIds = set; M.selB = set;
+  };
 
   // ---------------- network render ----------------
   const CABLE_COL = { Backbone: '#b57bff', Feeder: '#b57bff', Distribution: '#35e0c9', Drop: '#d4ff4a' };
-  M.renderNet = function () {
-    if (!M.ready) return; const S = FT.state;
+  const NO_BLD = new Set(['move', 'prop', 'add', 'delete', 'order', 'folder', 'import', 'prices', 'reconnect', 'codes', 'splice']); // changes that cannot alter the building layer
+  M.renderNet = function (why) { // coalesced: many changes in one frame render once
+    (M._why = M._why || []).push(why); if (M._raf) return;
+    M._raf = (window.requestAnimationFrame || (f => setTimeout(f, 16)))(() => { M._raf = 0; const w = M._why; M._why = []; M.renderNetNow(w); });
+  };
+  M.renderNetNow = function (why) {
+    if (!M.ready) return; const S = FT.state, needBld = !why || !why.length || why.some(x => !NO_BLD.has(x));
     const zN = FT.zOrder('nodes'), zP = FT.zOrder('pipes'), zC = FT.zOrder('cables');
     map.getSource('nodes').setData({ type: 'FeatureCollection', features: Object.values(S.nodes).map(n => ({ type: 'Feature', id: n.id, properties: { id: n.id, type: n.type, name: n.name, lab: n.name.replace(/^(F\d+)-(PS\d+)-(P\d+)-D\d+-FDB\d+$/, '$1·$2·$3'), z: zN[n.id] || 0 }, geometry: { type: 'Point', coordinates: n.ll } })).concat(Object.values(S.splices).map(sp => { const n = S.nodes[sp.node]; return n ? { type: 'Feature', id: sp.id, properties: { id: sp.id, type: 'splice', name: sp.label || '' }, geometry: { type: 'Point', coordinates: [n.ll[0] + 0.00003, n.ll[1] + 0.00003] } } : null; }).filter(Boolean)) });
     map.getSource('pipes').setData({ type: 'FeatureCollection', features: Object.values(S.pipes).map(p => ({ type: 'Feature', id: p.id, properties: { id: p.id, z: zP[p.id] || 0, color: p.color || null, aerial: p.ptype === 'aerial' ? 1 : 0 }, geometry: { type: 'LineString', coordinates: p.pts } })) });
     map.getSource('cables').setData({ type: 'FeatureCollection', features: Object.values(S.cables).map(c => { const pts = [].concat(...FT.cableSpans(c).map((s, i) => i ? s.pts.slice(1) : s.pts)); const g = (FT.CABLE_CAT.find(x => x.id === c.cat) || {}).group || 'Feeder'; return { type: 'Feature', id: c.id, properties: { id: c.id, z: zC[c.id] || 0, color: c.color || CABLE_COL[g] }, geometry: { type: 'LineString', coordinates: pts.length > 1 ? pts : (c.pts || []) } }; }) });
     if (FT.wl) FT.wl.render();
     if (FT.imp) FT.imp.render();
-    M.rebuildBuildingData && M.bldFeats && M.rebuildBuildingData();
+    if (needBld && M.rebuildBuildingData && M.bldFeats) M.rebuildBuildingData();
   };
   M.setSelection = function (kind, id) {
     const S = FT.state; let f = [];

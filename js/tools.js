@@ -201,7 +201,7 @@
     if (!(FT.store && FT.store.mode === 'view')) {
       if (map.getLayer('bh-pt') && T.sel && T.sel.kind === 'bld') { // building handles: stretch / move / single corner
         const hb = map.queryRenderedFeatures(bx, { layers: ['bh-pt', 'bh-vtx'] });
-        if (hb.length) { const f = hb.find(x => x.layer.id === 'bh-pt') || hb[0], k = f.properties.k; if (FT.bedit.begin(T.sel.id, k, k === 'vtx' ? f.properties.i : f.properties.d, ll(e))) { dragging = { bh: true, moved: false, start: ll(e) }; map.dragPan.disable(); return; } }
+        if (hb.length) { const sc = x => { const q = map.project(x.geometry.coordinates); return Math.hypot(q.x - e.point.x, q.y - e.point.y) + (x.properties.k === 'move' ? 6 : 0); }; const f = hb.slice().sort((p1, p2) => sc(p1) - sc(p2))[0], k = f.properties.k; /* nearest handle to the cursor: icons overlap on small buildings */ if (FT.bedit.begin(T.sel.id, k, k === 'vtx' ? f.properties.i : f.properties.d, ll(e))) { dragging = { bh: true, moved: false, start: ll(e) }; map.dragPan.disable(); return; } }
       }
       if (map.getLayer('impv-pt') && !e.originalEvent.shiftKey) { // vertex of an unlocked imported file
         const iv = map.queryRenderedFeatures(bx, { layers: ['impv-pt'] });
@@ -218,7 +218,7 @@
     if (d.bh) { if (!d.moved && FT.dist(d.start, ll(e)) < 0.4) return; d.moved = true; FT.bedit.update(ll(e)); return; }
     if (d.imp) { if (!d.moved) { if (FT.dist(d.start, ll(e)) < 0.4) return; FT.commit(); d.moved = true; } FT.imp.moveVertex(d.imp, ll(e)); const now = Date.now(); if (now - impTick > 45) { impTick = now; FT.imp.render(); } return; }
     if (!d.moved) { if (FT.dist(d.start, ll(e)) < 0.6) return; FT.commit(); d.moved = true; }
-    T.moveNode(d.id, ll(e)); FT.map.renderNet(); FT.map.setSelection('node', d.id); U().meterNode(e.point, FT.dist(d.start, ll(e)));
+    T.moveNode(d.id, ll(e)); FT.map.renderNet('move'); FT.map.setSelection('node', d.id); U().meterNode(e.point, FT.dist(d.start, ll(e)));
   }
   function onUp() {
     if (!dragging) return; const d = dragging; map.dragPan.enable(); U().meter(null);

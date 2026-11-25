@@ -116,7 +116,7 @@
   };
 
   // ---------------- layer tree ----------------
-  const ROW_ICON = { node: n => '<img class="ico" src="' + FT.map.iconDataURL(n.type, 36) + '">', pipe: p => '<span class="dot" style="background:' + (p.color || '#2aa8ff') + '"></span>', cable: c => '<span class="dot" style="background:' + (c.color || ((FT.CABLE_CAT.find(x => x.id === c.cat) || {}).group === 'Drop' ? '#d4ff4a' : (FT.CABLE_CAT.find(x => x.id === c.cat) || {}).group === 'Distribution' ? '#35e0c9' : '#b57bff')) + '"></span>', splice: () => '<img class="ico" src="' + FT.map.iconDataURL('splice', 36) + '">' };
+  const ROW_ICON = { node: n => '<img class="ico" data-ic="' + n.type + '">', pipe: p => '<span class="dot" style="background:' + (p.color || '#2aa8ff') + '"></span>', cable: c => '<span class="dot" style="background:' + (c.color || ((FT.CABLE_CAT.find(x => x.id === c.cat) || {}).group === 'Drop' ? '#d4ff4a' : (FT.CABLE_CAT.find(x => x.id === c.cat) || {}).group === 'Distribution' ? '#35e0c9' : '#b57bff')) + '"></span>', splice: () => '<img class="ico" data-ic="splice">' };
   const COLL = { 'n:': 'nodes', 'p:': 'pipes', 'c:': 'cables', 's:': 'splices' }, NODE_ORDER = ['olt', 'sk', 'dk', 'bk', 'mh', 'hh', 'pole'];
   let dragKey = null, lastSelKey = '';
   UI.drawChips = function () {
@@ -139,61 +139,95 @@
   UI.treeSelect = function (force) {
     const el = $('#tree'); if (!el) return; const sel = T().sel, S = FT.state;
     const inTree = sel && ((sel.kind === 'node' && S.nodes[sel.id]) || (sel.kind === 'pipe' && S.pipes[sel.id]) || (sel.kind === 'cable' && S.cables[sel.id]) || (sel.kind === 'splice' && S.splices[sel.id]));
-    const row = inTree ? el.querySelector('.tr[data-id="' + sel.id + '"]') : null;
-    if (force || (inTree && !row)) { UI.refreshTree(); return; }
-    const old = el.querySelector('.tr.sel'); if (old) old.classList.remove('sel'); if (row) { row.classList.add('sel'); if (row.scrollIntoView) row.scrollIntoView({ block: 'nearest' }); }
+    if (force || (inTree && vIndex[sel.id] == null)) { UI.refreshTree(); return; }
+    const old = el.querySelector('.tr.sel'); if (old) old.classList.remove('sel');
+    if (!inTree) return; const row = el.querySelector('.tr[data-id="' + sel.id + '"]');
+    if (row) { row.classList.add('sel'); if (row.scrollIntoView) row.scrollIntoView({ block: 'nearest' }); }
+    else { el.scrollTop = Math.max(0, vIndex[sel.id] * VH - el.clientHeight / 2); UI.treeRender(); } // row is outside the rendered window
   };
+  let treeTimer = 0; UI.refreshTreeSoon = function () { clearTimeout(treeTimer); treeTimer = setTimeout(UI.refreshTree, 40); };
   UI.moveRow = function (key, dir) {
     const S = FT.state, coll = COLL[key.slice(0, 2)], id = key.slice(2); if (!coll || !S[coll][id]) return;
     let list = FT.ordered(coll); if (coll === 'nodes') list = list.filter(n => n.type === S.nodes[id].type);
     const i = list.findIndex(o => o.id === id), j = i + dir; if (i < 0 || j < 0 || j >= list.length) return;
     FT.commit(); FT.reorder(coll, id, list[j].id, dir > 0); FT.changed('order');
   };
+  // The tree keeps a flat list of row descriptors and renders only the rows on screen (a big city = 40 000+ rows).
+  const VH = 28; let vRows = [], vIndex = {}, vOn = false, vFrom = 0, vTo = 0, treeWired = false;
+  UI.treeRender = function () {
+    const el = $('#tree'); if (!el) return; const sel = T().sel, keep = el.scrollTop; let from = 0, to = vRows.length;
+    if (vOn) { const vh = el.clientHeight || 600; from = Math.max(0, Math.floor(keep / VH) - 30); to = Math.min(vRows.length, Math.ceil((keep + vh) / VH) + 30); }
+    let h = ''; for (let i = from; i < to; i++) { const d = vRows[i];
+      h += d.k === 'row' ? d.html.replace('%S%', sel && sel.id === d.id ? ' sel' : '').replace('%C%', T().hidden.has(d.id) ? '' : ' checked').replace('%L%', T().locked.has(d.id) ? '🔒' : '🔓').replace(/data-ic="(\w+)"/g, (m, t) => 'src="' + FT.map.iconDataURL(t, 36) + '"') : d.html; }
+    el.innerHTML = vOn ? '<div style="height:' + (from * VH) + 'px"></div>' + h + '<div style="height:' + ((vRows.length - to) * VH) + 'px"></div>' : h;
+    el.scrollTop = keep; vFrom = from; vTo = to;
+  };
   UI.refreshTree = function () {
-    const S = FT.state, el = $('#tree'); if (!el) return; const q = treeQuery.toLowerCase(), sel = T().sel, keep = el.scrollTop;
+    clearTimeout(treeTimer); const S = FT.state, el = $('#tree'); if (!el) return; const q = treeQuery.toLowerCase(), sel = T().sel;
     const match = (name, type) => (!q || (name + ' ' + type).toLowerCase().includes(q));
     const chipOK = k => chipFilter === 'all' || chipFilter === k;
     const nodeOK = n => match(n.name + ' ' + (n.label || '') + ' ' + (n.code || ''), n.type) && (chipFilter === 'all' || (chipFilter === 'olt' && n.type === 'olt') || (chipFilter === 'box' && FT.BOX_TYPES.includes(n.type)) || (chipFilter === 'mh' && ['mh', 'hh', 'pole'].includes(n.type)));
     const lst = { nodes: FT.ordered('nodes').filter(nodeOK), pipes: FT.ordered('pipes').filter(p => match(p.name, 'pipe') && chipOK('pipe')), cables: FT.ordered('cables').filter(c => match(c.name, 'cable') && chipOK('cable')), splices: FT.ordered('splices').filter(x => match(x.label || 'splice', 'splice') && chipOK('splice')) };
     const total = Object.keys(S.nodes).length + Object.keys(S.pipes).length + Object.keys(S.cables).length + Object.keys(S.splices).length;
-    if (!total && !Object.keys(S.imports || {}).length) { el.innerHTML = '<div class="empty">' + t('no_layers') + '</div>'; return; }
+    wireTree(); vRows = []; vIndex = {};
+    if (!total && !Object.keys(S.imports || {}).length) { vOn = false; el.innerHTML = '<div class="empty">' + t('no_layers') + '</div>'; return; }
     const fmap = S.fmap || {}, inFolder = key => fmap[key];
-    const row = (kind, o, key) => { const lock = T().locked.has(o.id), hid = T().hidden.has(o.id); const nm = o.name || (kind === 'splice' ? 'EK · ' + ((FT.state.nodes[o.node] || {}).name || '') + (o.label ? ' · ' + o.label : '') : o.label || kind);
-      return '<div class="tr' + (sel && sel.id === o.id ? ' sel' : '') + '" draggable="true" data-key="' + key + '" data-k="' + kind + '" data-id="' + o.id + '" style="padding-inline-start:30px"><input type="checkbox" ' + (hid ? '' : 'checked') + ' data-vis="' + o.id + '">' + ROW_ICON[kind](o) + '<span class="nm">' + esc(nm) + '</span><span class="acts"><button data-act="up" title="' + t('layer_up') + '">▲</button><button data-act="down" title="' + t('layer_down') + '">▼</button><button data-act="lock" title="' + t('layer_lock') + '">' + (lock ? '🔒' : '🔓') + '</button><button data-act="del" title="' + t('layer_del') + '">🗑</button><button data-act="more" title="' + t('layer_actions') + '">⋯</button></span></div>'; };
-    const grp = (id, title, items, kind, prefixKey) => { const open = !collapsed.has(id), its = items.filter(o => !inFolder(prefixKey + o.id)); if (!items.length) return ''; return '<div class="tr fold" data-fold="' + id + '"><span class="tw">' + (open ? '▾' : '▸') + '</span><span class="nm">' + esc(title) + '</span><span class="ct">' + its.length + '</span></div>' + (open ? its.map(o => row(kind, o, prefixKey + o.id)).join('') : ''); };
-    let h = '<div class="tr fold" data-fold="root"><span class="tw">' + (collapsed.has('root') ? '▸' : '▾') + '</span><span class="nm">' + t('physical') + '</span></div>';
+    const row = (kind, o, key) => { const nm = o.name || (kind === 'splice' ? 'EK · ' + ((FT.state.nodes[o.node] || {}).name || '') + (o.label ? ' · ' + o.label : '') : o.label || kind);
+      vIndex[o.id] = vRows.length; vRows.push({ k: 'row', id: o.id, html: '<div class="tr%S%" draggable="true" data-key="' + key + '" data-k="' + kind + '" data-id="' + o.id + '" style="padding-inline-start:30px"><input type="checkbox"%C% data-vis="' + o.id + '">' + ROW_ICON[kind](o) + '<span class="nm">' + esc(nm) + '</span><span class="acts"><button data-act="up" title="' + t('layer_up') + '">▲</button><button data-act="down" title="' + t('layer_down') + '">▼</button><button data-act="lock" title="' + t('layer_lock') + '">%L%</button><button data-act="del" title="' + t('layer_del') + '">🗑</button><button data-act="more" title="' + t('layer_actions') + '">⋯</button></span></div>' }); };
+    const raw = html => vRows.push({ k: 'raw', html });
+    const grp = (id, title, items, kind, prefixKey) => { const open = !collapsed.has(id), its = items.filter(o => !inFolder(prefixKey + o.id)); if (!items.length) return; raw('<div class="tr fold" data-fold="' + id + '"><span class="tw">' + (open ? '▾' : '▸') + '</span><span class="nm">' + esc(title) + '</span><span class="ct">' + its.length + '</span></div>'); if (open) its.forEach(o => row(kind, o, prefixKey + o.id)); };
+    raw('<div class="tr fold" data-fold="root"><span class="tw">' + (collapsed.has('root') ? '▸' : '▾') + '</span><span class="nm">' + t('physical') + '</span></div>');
     if (!collapsed.has('root')) {
       Object.entries(S.folders || {}).forEach(([fid, f]) => { const open = !collapsed.has(fid); const items = []; lst.nodes.forEach(o => fmap['n:' + o.id] === fid && items.push(['node', o, 'n:' + o.id])); lst.pipes.forEach(o => fmap['p:' + o.id] === fid && items.push(['pipe', o, 'p:' + o.id])); lst.cables.forEach(o => fmap['c:' + o.id] === fid && items.push(['cable', o, 'c:' + o.id]));
-        h += '<div class="tr fold" data-fold="' + fid + '" data-drop="' + fid + '" style="padding-inline-start:16px"><span class="tw">' + (open ? '▾' : '▸') + '</span><span class="nm">📁 ' + esc(f.name) + '</span><span class="ct">' + items.length + '</span><span class="acts"><button data-act="fren" data-fid="' + fid + '">✎</button><button data-act="fdel" data-fid="' + fid + '">🗑</button></span></div>' + (open ? items.map(x => row(x[0], x[1], x[2])).join('') : ''); });
-      NODE_ORDER.forEach(tp => { h += grp('nodes:' + tp, t('tg_' + tp), lst.nodes.filter(n => n.type === tp), 'node', 'n:'); });
-      h += grp('pipes', t('pipes'), lst.pipes, 'pipe', 'p:') + grp('cables', t('cables'), lst.cables, 'cable', 'c:') + grp('splices', t('splices'), lst.splices, 'splice', 's:') + importsGroup();
+        raw('<div class="tr fold" data-fold="' + fid + '" data-drop="' + fid + '" style="padding-inline-start:16px"><span class="tw">' + (open ? '▾' : '▸') + '</span><span class="nm">📁 ' + esc(f.name) + '</span><span class="ct">' + items.length + '</span><span class="acts"><button data-act="fren" data-fid="' + fid + '">✎</button><button data-act="fdel" data-fid="' + fid + '">🗑</button></span></div>'); if (open) items.forEach(x => row(x[0], x[1], x[2])); });
+      NODE_ORDER.forEach(tp => grp('nodes:' + tp, t('tg_' + tp), lst.nodes.filter(n => n.type === tp), 'node', 'n:'));
+      grp('pipes', t('pipes'), lst.pipes, 'pipe', 'p:'); grp('cables', t('cables'), lst.cables, 'cable', 'c:'); grp('splices', t('splices'), lst.splices, 'splice', 's:');
+      const ig = importsGroup(); if (ig) raw(ig);
     }
-    el.innerHTML = h;
-    el.querySelectorAll('[data-fold]').forEach(f => f.onclick = e => { if (e.target.closest('.acts')) return; const id = f.dataset.fold; collapsed.has(id) ? collapsed.delete(id) : collapsed.add(id); UI.refreshTree(); });
-    const clearMarks = () => el.querySelectorAll('.dropa,.dropb').forEach(x => x.classList.remove('dropa', 'dropb'));
-    el.querySelectorAll('.tr[data-id]').forEach(r => {
-      const id = r.dataset.id, k = r.dataset.k, key = r.dataset.key;
-      r.onclick = e => { if (e.target.closest('.acts') || e.target.type === 'checkbox') return; T().select(k, id); };
-      r.ondblclick = () => { T().select(k, id); UI.zoomSel(); };
-      r.ondragstart = e => { dragKey = key; e.dataTransfer.setData('text', key); e.dataTransfer.effectAllowed = 'move'; r.classList.add('dragging'); };
-      r.ondragend = () => { dragKey = null; r.classList.remove('dragging'); clearMarks(); };
-      const sameColl = () => { if (!dragKey || dragKey === key || dragKey.slice(0, 2) !== key.slice(0, 2)) return false; if (key.startsWith('n:')) { const a = S.nodes[dragKey.slice(2)], b = S.nodes[id]; return !!(a && b && a.type === b.type); } return true; };
-      r.ondragover = e => { if (!sameColl()) return; e.preventDefault(); const rc = r.getBoundingClientRect(), after = e.clientY > rc.top + rc.height / 2; clearMarks(); r.classList.add(after ? 'dropa' : 'dropb'); };
-      r.ondragleave = () => r.classList.remove('dropa', 'dropb');
-      r.ondrop = e => { if (!sameColl()) return; e.preventDefault(); e.stopPropagation(); const rc = r.getBoundingClientRect(), after = e.clientY > rc.top + rc.height / 2, did = dragKey.slice(2); clearMarks(); FT.commit(); if (FT.reorder(COLL[key.slice(0, 2)], did, id, after)) FT.changed('order'); };
-      r.querySelectorAll('[data-act]').forEach(b => b.onclick = e => { e.stopPropagation(); const a = b.dataset.act; if (a === 'lock') { T().locked.has(id) ? T().locked.delete(id) : T().locked.add(id); UI.refreshTree(); } else if (a === 'del') { T().select(k, id); T().deleteSelection(); } else if (a === 'up' || a === 'down') UI.moveRow(key, a === 'up' ? -1 : 1); else if (a === 'more') { T().select(k, id); const rc = b.getBoundingClientRect(); UI.ctxMenu(rc.right, rc.bottom, { kind: k, id }, [0, 0]); } });
-      const cb = r.querySelector('[data-vis]'); cb.onchange = () => { cb.checked ? T().hidden.delete(id) : T().hidden.add(id); UI.applyHidden(); };
-    });
-    el.querySelectorAll('[data-impvis]').forEach(c => c.onchange = () => { c.checked ? T().hidden.delete(c.dataset.impvis) : T().hidden.add(c.dataset.impvis); FT.imp.render(); });
-    el.querySelectorAll('[data-impdel]').forEach(b => b.onclick = e => { e.stopPropagation(); FT.commit(); delete FT.state.imports[b.dataset.impdel]; FT.imp.unlocked.delete(b.dataset.impdel); FT.changed('import'); });
-    el.querySelectorAll('[data-implock]').forEach(b => b.onclick = e => { e.stopPropagation(); FT.imp.setLocked(b.dataset.implock, !FT.imp.isLocked(b.dataset.implock)); });
-    el.querySelectorAll('[data-imp]').forEach(r => r.ondblclick = () => { const g = FT.state.imports[r.dataset.imp]; if (g) FT.map.fitBBox(FT.bboxOf([].concat(...g.features.slice(0, 2000).map(f => f.geometry.type === 'Point' ? [f.geometry.coordinates] : f.geometry.type === 'LineString' ? f.geometry.coordinates : f.geometry.coordinates[0])))); });
-    el.querySelectorAll('[data-drop]').forEach(f => { f.ondragover = e => { if (dragKey) e.preventDefault(); }; f.ondrop = e => { e.preventDefault(); const key = e.dataTransfer.getData('text'); if (!key) return; FT.commit(); (S.fmap = S.fmap || {})[key] = f.dataset.drop; FT.changed('folder'); }; });
-    el.querySelectorAll('[data-act=fren]').forEach(b => b.onclick = async e => { e.stopPropagation(); const f = S.folders[b.dataset.fid]; const n = await UI.ask(t('new_folder'), f.name); if (n) { FT.commit(); f.name = n; FT.changed('folder'); } });
-    el.querySelectorAll('[data-act=fdel]').forEach(b => b.onclick = e => { e.stopPropagation(); FT.commit(); const fid = b.dataset.fid; delete S.folders[fid]; Object.keys(S.fmap || {}).forEach(k => S.fmap[k] === fid && delete S.fmap[k]); FT.changed('folder'); });
-    el.scrollTop = keep; const sk = sel ? sel.kind + ':' + sel.id : '';
-    if (sk !== lastSelKey) { lastSelKey = sk; const se = el.querySelector('.tr.sel'); if (se && se.scrollIntoView) se.scrollIntoView({ block: 'nearest' }); }
+    vOn = vRows.length > 300; UI.treeRender();
+    const sk = sel ? sel.kind + ':' + sel.id : '';
+    if (sk !== lastSelKey) { lastSelKey = sk; if (sel && vIndex[sel.id] != null) { const rw = el.querySelector('.tr.sel'); if (rw && rw.scrollIntoView) rw.scrollIntoView({ block: 'nearest' }); else { el.scrollTop = Math.max(0, vIndex[sel.id] * VH - el.clientHeight / 2); UI.treeRender(); } } }
   };
+  // events are delegated on the container (rows come and go while scrolling)
+  function wireTree() {
+    if (treeWired) return; treeWired = true; const el = $('#tree'), S = () => FT.state;
+    const clearMarks = () => el.querySelectorAll('.dropa,.dropb').forEach(x => x.classList.remove('dropa', 'dropb'));
+    const sameColl = r => { const key = r.dataset.key; if (!dragKey || !key || dragKey === key || dragKey.slice(0, 2) !== key.slice(0, 2)) return false; if (key.startsWith('n:')) { const a = S().nodes[dragKey.slice(2)], b = S().nodes[r.dataset.id]; return !!(a && b && a.type === b.type); } return true; };
+    let tick = 0; el.addEventListener('scroll', () => { if (!vOn || tick) return; tick = requestAnimationFrame(() => { tick = 0; const st = el.scrollTop, vh = el.clientHeight || 600; if (Math.floor(st / VH) - 8 < vFrom && vFrom > 0 || Math.ceil((st + vh) / VH) + 8 > vTo && vTo < vRows.length) UI.treeRender(); }); });
+    el.addEventListener('click', e => {
+      const tg = e.target, btn = tg.closest('button'), r = tg.closest('.tr'); if (!r) return;
+      if (btn && btn.dataset.implock) { e.stopPropagation(); FT.imp.setLocked(btn.dataset.implock, !FT.imp.isLocked(btn.dataset.implock)); return; }
+      if (btn && btn.dataset.impdel) { e.stopPropagation(); FT.commit(); delete S().imports[btn.dataset.impdel]; FT.imp.unlocked.delete(btn.dataset.impdel); FT.changed('import'); return; }
+      if (btn && btn.dataset.act) { e.stopPropagation(); const a = btn.dataset.act, id = r.dataset.id, k = r.dataset.k, key = r.dataset.key;
+        if (a === 'lock') { T().locked.has(id) ? T().locked.delete(id) : T().locked.add(id); UI.treeRender(); }
+        else if (a === 'del') { T().select(k, id); T().deleteSelection(); } else if (a === 'up' || a === 'down') UI.moveRow(key, a === 'up' ? -1 : 1);
+        else if (a === 'more') { T().select(k, id); const rc = btn.getBoundingClientRect(); UI.ctxMenu(rc.right, rc.bottom, { kind: k, id }, [0, 0]); }
+        else if (a === 'fren') (async () => { const f = S().folders[btn.dataset.fid]; const n = await UI.ask(t('new_folder'), f.name); if (n) { FT.commit(); f.name = n; FT.changed('folder'); } })();
+        else if (a === 'fdel') { FT.commit(); const fid = btn.dataset.fid; delete S().folders[fid]; Object.keys(S().fmap || {}).forEach(kk => S().fmap[kk] === fid && delete S().fmap[kk]); FT.changed('folder'); }
+        return; }
+      if (tg.type === 'checkbox') return;
+      if (r.dataset.fold) { const id = r.dataset.fold; collapsed.has(id) ? collapsed.delete(id) : collapsed.add(id); UI.refreshTree(); return; }
+      if (r.dataset.id) T().select(r.dataset.k, r.dataset.id);
+    });
+    el.addEventListener('dblclick', e => {
+      const r = e.target.closest('.tr'); if (!r || e.target.closest('.acts')) return;
+      if (r.dataset.id) { T().select(r.dataset.k, r.dataset.id); UI.zoomSel(); }
+      else if (r.dataset.imp) { const g = S().imports[r.dataset.imp]; if (g) FT.map.fitBBox(FT.bboxOf([].concat(...g.features.slice(0, 2000).map(f => f.geometry.type === 'Point' ? [f.geometry.coordinates] : f.geometry.type === 'LineString' ? f.geometry.coordinates : f.geometry.coordinates[0])))); }
+    });
+    el.addEventListener('change', e => { const c = e.target;
+      if (c.dataset.vis) { c.checked ? T().hidden.delete(c.dataset.vis) : T().hidden.add(c.dataset.vis); UI.applyHidden(); }
+      else if (c.dataset.impvis) { c.checked ? T().hidden.delete(c.dataset.impvis) : T().hidden.add(c.dataset.impvis); FT.imp.render(); } });
+    el.addEventListener('dragstart', e => { const r = e.target.closest && e.target.closest('.tr[data-key]'); if (!r) return; dragKey = r.dataset.key; e.dataTransfer.setData('text', dragKey); e.dataTransfer.effectAllowed = 'move'; r.classList.add('dragging'); });
+    el.addEventListener('dragend', e => { dragKey = null; const r = e.target.closest && e.target.closest('.tr'); if (r) r.classList.remove('dragging'); clearMarks(); });
+    el.addEventListener('dragover', e => { const f = e.target.closest('[data-drop]'); if (f && dragKey) { e.preventDefault(); return; } const r = e.target.closest('.tr[data-key]'); if (!r || !sameColl(r)) return; e.preventDefault(); const rc = r.getBoundingClientRect(), after = e.clientY > rc.top + rc.height / 2; clearMarks(); r.classList.add(after ? 'dropa' : 'dropb'); });
+    el.addEventListener('dragleave', e => { const r = e.target.closest && e.target.closest('.tr'); if (r) r.classList.remove('dropa', 'dropb'); });
+    el.addEventListener('drop', e => {
+      const f = e.target.closest('[data-drop]');
+      if (f) { e.preventDefault(); const key = e.dataTransfer.getData('text'); if (!key) return; FT.commit(); (S().fmap = S().fmap || {})[key] = f.dataset.drop; FT.changed('folder'); return; }
+      const r = e.target.closest('.tr[data-key]'); if (!r || !sameColl(r)) return; e.preventDefault(); e.stopPropagation(); const rc = r.getBoundingClientRect(), after = e.clientY > rc.top + rc.height / 2, did = dragKey.slice(2); clearMarks();
+      FT.commit(); if (FT.reorder(COLL[r.dataset.key.slice(0, 2)], did, r.dataset.id, after)) FT.changed('order');
+    });
+  }
   function importsGroup() {
     const im = Object.values(FT.state.imports || {}); if (!im.length) return ''; const open = !collapsed.has('imports');
     return '<div class="tr fold" data-fold="imports"><span class="tw">' + (open ? '▾' : '▸') + '</span><span class="nm">' + t('imports') + '</span><span class="ct">' + im.length + '</span></div>' + (open ? im.map(g => { const lk = FT.imp.isLocked(g.id);
@@ -440,7 +474,7 @@
     $('#cross').innerHTML = '<i class="v"></i><i class="h"></i>'; $('#mapwrap').addEventListener('mousemove', e => { const r = $('#mapwrap').getBoundingClientRect(), v = $('#cross .v'), h = $('#cross .h'); v.style.left = (e.clientX - r.left) + 'px'; h.style.top = (e.clientY - r.top) + 'px'; });
     $('#bNames').onclick = () => { names = !names; $('#bNames').classList.toggle('on', names); FT.map.map.setLayoutProperty('nodes', 'text-field', names ? ['coalesce', ['get', 'lab'], ['get', 'name']] : ['step', ['zoom'], '', 15.5, ['coalesce', ['get', 'lab'], ['get', 'name']]]); };
     $$('.tabs button[data-tab]').forEach(b => b.onclick = () => UI.tab(b.dataset.tab));
-    wireSearch(); FT.map.map.on('moveend', () => FT.imp && FT.imp.renderHandles()); FT.onChange(() => { if (FT.bedit) FT.bedit.refresh(); UI.refreshTree(); UI.renderPanelKeep(); $('#bUndo').disabled = !FT.canUndo(); $('#bRedo').disabled = !FT.canRedo(); });
+    wireSearch(); FT.map.map.on('moveend', () => FT.imp && FT.imp.renderHandles()); FT.onChange(why => { if (FT.bedit) FT.bedit.refresh(); if (why !== 'move') UI.refreshTreeSoon(); UI.renderPanelKeep(); $('#bUndo').disabled = !FT.canUndo(); $('#bRedo').disabled = !FT.canRedo(); });
     $('#bUndo').disabled = true; $('#bRedo').disabled = true; UI.tab('tool');
     if (await FT.store.openFromUrl()) UI.afterProject(); else { const last = localStorage.getItem('ft2_last'); if (last && await FT.store.open(last)) UI.afterProject(); else UI.openProjects(true); }
   };
