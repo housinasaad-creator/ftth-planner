@@ -41,7 +41,8 @@
     else if (type === 'ap' || type === 'cpe' || type === 'ptp') { const wc = { ap: '#35e0c9', cpe: '#ffd24a', ptp: '#b57bff' }[type]; ring(s * 0.2, wc, '#07090d', s * 0.06); g.strokeStyle = wc; g.lineWidth = s * 0.06; for (const r of [0.32, 0.44]) { g.beginPath(); g.arc(0, 0, s * r, -0.9, 0.9); g.stroke(); g.beginPath(); g.arc(0, 0, s * r, Math.PI - 0.9, Math.PI + 0.9); g.stroke(); } }
     return g.getImageData(0, 0, s, s);
   }
-  M.iconDataURL = function (type, size) { const d = icon(type, size || 64), c = document.createElement('canvas'); c.width = d.width; c.height = d.height; c.getContext('2d').putImageData(d, 0, 0); return c.toDataURL(); };
+  const iconCache = {};
+  M.iconDataURL = function (type, size) { const k = type + '|' + (size || 64); if (iconCache[k]) return iconCache[k]; const d = icon(type, size || 64), c = document.createElement('canvas'); c.width = d.width; c.height = d.height; c.getContext('2d').putImageData(d, 0, 0); return (iconCache[k] = c.toDataURL()); };
 
   // ---------------- init ----------------
   M.init = async function (container) {

@@ -54,16 +54,17 @@
     if (e && e.key && e.key !== 'local' && (e.mode || 'edit') === 'edit') { try { await rpc('ftth_delete_project', { p_id: id, p_key: e.key }); } catch (x) { /* offline: just forget locally */ } }
     setReg(reg().filter(x => x.id !== id)); localStorage.removeItem(CACHE(id)); if (S.cur && S.cur.id === id) S.cur = null; if (localStorage.getItem('ft2_last') === id) localStorage.removeItem('ft2_last');
   };
+  const cacheSet = (k, v) => { try { localStorage.setItem(k, v); return true; } catch (e) { return false; } }; // the browser cache is optional: a full storage must not stop the save
   S.saveNow = async function () {
     if (!S.cur) return; const st = FT.state; st.meta = st.meta || {}; st.meta.name = st.meta.name || S.cur.name; st.meta.type = st.meta.type || S.cur.type;
-    localStorage.setItem(CACHE(S.cur.id), JSON.stringify(st)); localStorage.setItem('ft2_t_' + S.cur.id, String(Date.now())); upsertReg({ id: S.cur.id, name: st.meta.name, type: st.meta.type, updated: Date.now() });
+    cacheSet(CACHE(S.cur.id), JSON.stringify(st)); cacheSet('ft2_t_' + S.cur.id, String(Date.now())); try { upsertReg({ id: S.cur.id, name: st.meta.name, type: st.meta.type, updated: Date.now() }); } catch (e) { }
     if (S.mode !== 'edit' || S.cur.key === 'local') return;
     try { await rpc('ftth_save_project', { p_id: S.cur.id, p_key: S.cur.key, p_name: st.meta.name, p_type: st.meta.type, p_state: st }); S.online = true; if (FT.UI) FT.UI.saved(true); }
     catch (e) { S.online = false; if (FT.UI) FT.UI.saved(false); }
   };
-  S.autosave = function () { if (S.mode !== 'edit') return; clearTimeout(S.saveTimer); S.saveTimer = setTimeout(S.saveNow, 1200); localStorage.setItem('ft2_t_' + S.cur.id, String(Date.now())); localStorage.setItem(CACHE(S.cur.id), JSON.stringify(FT.state)); };
+  S.autosave = function () { if (S.mode !== 'edit') return; clearTimeout(S.saveTimer); S.saveTimer = setTimeout(S.saveNow, 1200); };
   S.links = function () { const base = location.origin + location.pathname, c = S.cur; if (!c || c.key === 'local') return null; const e = reg().find(x => x.id === c.id) || {}; return { edit: base + '?p=' + c.id + '&k=' + c.key, view: (c.viewKey || e.viewKey) ? base + '?p=' + c.id + '&k=' + (c.viewKey || e.viewKey) : null }; };
   FT.onChange(why => { if (why !== 'load') S.autosave(); });
-  const flush = () => { if (S.cur && S.mode === 'edit') { localStorage.setItem(CACHE(S.cur.id), JSON.stringify(FT.state)); localStorage.setItem('ft2_t_' + S.cur.id, String(Date.now())); try { S.saveNow(); } catch (e) { } } };
+  const flush = () => { if (S.cur && S.mode === 'edit') { try { S.saveNow(); } catch (e) { } } };
   G.addEventListener('beforeunload', flush); G.addEventListener('pagehide', flush); document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flush(); });
 })(window);

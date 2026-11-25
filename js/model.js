@@ -115,7 +115,7 @@
   FT.commit = function (reason) { // call BEFORE mutating
     undo.push(snap()); if (undo.length > 80) undo.shift(); redo = [];
   };
-  FT.changed = function (why) { FT.listeners.forEach(fn => { try { fn(why); } catch (e) { console.error(e); } }); };
+  FT.changed = function (why) { FT.dropPipeIndex && FT.dropPipeIndex(); FT.listeners.forEach(fn => { try { fn(why); } catch (e) { console.error(e); } }); };
   FT.undo = function () { if (!undo.length) return false; redo.push(snap()); FT.state = JSON.parse(undo.pop()); FT.changed('undo'); return true; };
   FT.redo = function () { if (!redo.length) return false; undo.push(snap()); FT.state = JSON.parse(redo.pop()); FT.changed('redo'); return true; };
   FT.canUndo = () => undo.length > 0; FT.canRedo = () => redo.length > 0;
@@ -153,7 +153,7 @@
   FT.addPipe = function (pts, a, b, ptype, cat) {
     const S = FT.state; S.seq.pipe++;
     const p = { id: FT.uid('p'), name: 'Pipe #' + S.seq.pipe, no: S.seq.pipe, ptype: ptype || 'hdpe', cat: cat || 'h40', pts, a, b, note: '', color: '', depth: 30, width: 6, cover: 24 };
-    S.pipes[p.id] = p; return p;
+    S.pipes[p.id] = p; pipeIdx = null; return p;
   };
   FT.addCable = function (pts, a, b, cat, medium, nodeIds, segs) {
     const S = FT.state, c0 = FT.CABLE_CAT.find(x => x.id === cat) || FT.CABLE_CAT[1]; S.seq.cable++;
@@ -162,7 +162,13 @@
     S.cables[c.id] = c; return c;
   };
   FT.nodeById = id => FT.state.nodes[id];
-  FT.pipeBetween = (a, b) => Object.values(FT.state.pipes).find(p => (p.a === a && p.b === b) || (p.a === b && p.b === a));
+  let pipeIdx = null, pipeIdxFor = null;
+  FT.pipeBetween = (a, b) => { // indexed (rebuilt when the pipes object or their number changes; FT.changed also drops it)
+    const P = FT.state.pipes;
+    if (!pipeIdx || pipeIdxFor !== P) { pipeIdx = {}; Object.values(P).forEach(p => { const k1 = p.a + '|' + p.b, k2 = p.b + '|' + p.a; if (!pipeIdx[k1]) pipeIdx[k1] = p; if (!pipeIdx[k2]) pipeIdx[k2] = p; }); pipeIdxFor = P; }
+    const p = pipeIdx[a + '|' + b]; return p && P[p.id] === p && ((p.a === a && p.b === b) || (p.a === b && p.b === a)) ? p : undefined;
+  };
+  FT.dropPipeIndex = () => { pipeIdx = null; };
   FT.cableSpans = function (c) {
     // consecutive node pairs; span medium = pipe if a pipe joins them else cable.medium
     const out = [], ids = c.nodes || [c.a, c.b];
@@ -177,12 +183,12 @@
   };
   FT.cableLength = c => FT.cableSpans(c).reduce((s, x) => s + x.len, 0);
   FT.deleteNode = function (id) {
-    const S = FT.state; delete S.nodes[id];
+    const S = FT.state; delete S.nodes[id]; pipeIdx = null;
     Object.values(S.pipes).forEach(p => { if (p.a === id || p.b === id) delete S.pipes[p.id]; });
     Object.values(S.cables).forEach(c => { if (c.nodes.includes(id)) delete S.cables[c.id]; });
     Object.values(S.splices).forEach(s => { if (s.node === id) delete S.splices[s.id]; });
   };
-  FT.deletePipe = id => { delete FT.state.pipes[id]; };
+  FT.deletePipe = id => { delete FT.state.pipes[id]; pipeIdx = null; };
   FT.deleteCable = id => { delete FT.state.cables[id]; Object.values(FT.state.splices).forEach(s => { if (s.inCable === id) s.inCable = ''; if (s.outCable === id) s.outCable = ''; }); };
 
   // ---------------- material prices (USD) and automatic costing ----------------

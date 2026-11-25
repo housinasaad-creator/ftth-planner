@@ -49,16 +49,16 @@
     T.sel = kind ? { kind, id } : null; if (kind) T.multi = null;
     if (kind === 'bld') T.bsel = new Set([id]); else T.bsel = new Set();
     FT.map.setSelection(kind, id); FT.map.setBuildingSelection(new Set(T.bsel));
-    if (FT.bedit) FT.bedit.refresh(); if (kind && U().reveal) U().reveal(kind, id);
-    U().selectionChanged(); U().refreshTree();
+    if (FT.bedit) FT.bedit.refresh(); const ch = kind && U().reveal ? U().reveal(kind, id) : false;
+    U().selectionChanged(); U().treeSelect(ch);
   };
   T.toggleBuilding = function (id) {
     if (T.sel && T.sel.kind === 'bld' && !T.bsel.size) T.bsel.add(T.sel.id);
     if (T.bsel.has(id)) T.bsel.delete(id); else T.bsel.add(id);
     const last = T.bsel.has(id) ? id : [...T.bsel].pop(); T.multi = null; T.sel = last ? { kind: 'bld', id: last } : null;
-    FT.map.setSelection(null); FT.map.setBuildingSelection(new Set(T.bsel)); FT.bedit.refresh(); U().selectionChanged(); U().refreshTree();
+    FT.map.setSelection(null); FT.map.setBuildingSelection(new Set(T.bsel)); FT.bedit.refresh(); U().selectionChanged(); U().treeSelect();
   };
-  T.selectMulti = function (m) { T.multi = m; T.sel = null; FT.map.setSelection(null); U().selectionChanged(); U().refreshTree(); };
+  T.selectMulti = function (m) { T.multi = m; T.sel = null; FT.map.setSelection(null); U().selectionChanged(); U().treeSelect(); };
 
   function nodeNear(pt, r) {
     r = r || 16; let best = null, bd = r;

@@ -128,12 +128,20 @@
   UI.reveal = function (kind, id) {
     const S = FT.state; let grp = null, o = null;
     if (kind === 'node') { o = S.nodes[id]; grp = o && 'nodes:' + o.type; } else if (kind === 'pipe') { o = S.pipes[id]; grp = 'pipes'; } else if (kind === 'cable') { o = S.cables[id]; grp = 'cables'; } else if (kind === 'splice') { o = S.splices[id]; grp = 'splices'; }
-    if (!o) return; collapsed.delete('root'); if (grp) collapsed.delete(grp);
-    const fid = (S.fmap || {})[({ node: 'n:', pipe: 'p:', cable: 'c:', splice: 's:' }[kind]) + id]; if (fid) collapsed.delete(fid);
+    if (!o) return false; let changed = false; if (collapsed.delete('root')) changed = true; if (grp && collapsed.delete(grp)) changed = true;
+    const fid = (S.fmap || {})[({ node: 'n:', pipe: 'p:', cable: 'c:', splice: 's:' }[kind]) + id]; if (fid && collapsed.delete(fid)) changed = true;
     const visible = chipFilter === 'all' || (kind === 'node' && ((chipFilter === 'olt' && o.type === 'olt') || (chipFilter === 'box' && FT.BOX_TYPES.includes(o.type)) || (chipFilter === 'mh' && ['mh', 'hh', 'pole'].includes(o.type)))) || chipFilter === kind;
-    if (!visible) { chipFilter = 'all'; UI.drawChips(); }
-    if (treeQuery) { treeQuery = ''; const ls = $('#lsearch'); if (ls) ls.value = ''; }
-    lastSelKey = '';
+    if (!visible) { chipFilter = 'all'; UI.drawChips(); changed = true; }
+    if (treeQuery) { treeQuery = ''; const ls = $('#lsearch'); if (ls) ls.value = ''; changed = true; }
+    lastSelKey = ''; return changed;
+  };
+  // selection only moves the highlight (cheap); the tree is rebuilt only if the row is missing
+  UI.treeSelect = function (force) {
+    const el = $('#tree'); if (!el) return; const sel = T().sel, S = FT.state;
+    const inTree = sel && ((sel.kind === 'node' && S.nodes[sel.id]) || (sel.kind === 'pipe' && S.pipes[sel.id]) || (sel.kind === 'cable' && S.cables[sel.id]) || (sel.kind === 'splice' && S.splices[sel.id]));
+    const row = inTree ? el.querySelector('.tr[data-id="' + sel.id + '"]') : null;
+    if (force || (inTree && !row)) { UI.refreshTree(); return; }
+    const old = el.querySelector('.tr.sel'); if (old) old.classList.remove('sel'); if (row) { row.classList.add('sel'); if (row.scrollIntoView) row.scrollIntoView({ block: 'nearest' }); }
   };
   UI.moveRow = function (key, dir) {
     const S = FT.state, coll = COLL[key.slice(0, 2)], id = key.slice(2); if (!coll || !S[coll][id]) return;

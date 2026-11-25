@@ -10,8 +10,15 @@
   function morton(x, y) { let z = 0; for (let i = 0; i < 16; i++) z |= ((x >> i) & 1) << (2 * i) | ((y >> i) & 1) << (2 * i + 1); return z >>> 0; }
   const avg = arr => [arr.reduce((s, p) => s + p[0], 0) / arr.length, arr.reduce((s, p) => s + p[1], 0) / arr.length];
   // the point on the building wall that faces the nearest street (the FDB sits at the entrance)
-  function entrance(ring, c, from) {
-    const rn = FT.roads.nearest ? FT.roads.nearest(c, 80) : null, target = rn ? rn.ll : from, closed = ring.concat([ring[0]]);
+  function entrance(ring, c, from, id) {
+    const R = FT.roads; let best = null;
+    for (let i = 0; i < ring.length && R.on; i++) { // middle of every wall: the one with the shortest street stub that crosses no other house
+      const a = ring[i], b = ring[(i + 1) % ring.length], m = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2], np = R.nearest(m, 60); if (!np) continue;
+      let bad = R.inBuilding(m, id) ? 1 : 0; for (const t of [0.25, 0.5, 0.75]) if (R.inBuilding([np.ll[0] + (m[0] - np.ll[0]) * t, np.ll[1] + (m[1] - np.ll[1]) * t], id)) bad++;
+      const score = FT.dist(np.ll, m) + bad * 500; if (!best || score < best.score) best = { score, m };
+    }
+    if (best) return best.m;
+    const rn = R.nearest ? R.nearest(c, 80) : null, target = rn ? rn.ll : from, closed = ring.concat([ring[0]]);
     return FT.nearestOnPath(target, closed).pt;
   }
   D.SPLITS = [[4, 4], [2, 8], [8, 2]]; // stage 1 x stage 2 = 16
@@ -32,20 +39,22 @@
     opt = opt || {}; const s1 = opt.s1 || 4, s2 = opt.s2 || 4, cap = Math.max(s1, opt.cab || 48), B = FT.BASE_LOSS;
     const kx = Math.cos(olt.ll[1] * Math.PI / 180) * 111320, ky = 110540;
     const P = blds.map(b => ({ id: b.id, c: b.c, ring: b.ring, o: b.o || {}, m: morton(Math.floor((b.c[0] * kx) / 6) & 0xffff, Math.floor((b.c[1] * ky) / 6) & 0xffff) })).sort((a, b) => a.m - b.m);
-    const fdbs = P.map(p => ({ b: p, ll: entrance(p.ring, p.c, olt.ll) }));
+    const fdbs = P.map(p => ({ b: p, ll: entrance(p.ring, p.c, olt.ll, p.id) }));
     const nCab = Math.max(1, Math.ceil(fdbs.length / cap)), size = Math.ceil(fdbs.length / nCab), cabs = [];
     for (let i = 0; i < nCab; i++) { const g = fdbs.slice(i * size, (i + 1) * size); if (!g.length) break; cabs.push({ ll: FT.roads.snapPoint(avg(g.map(f => f.ll)), 60), fdbs: g }); }
     cabs.sort((a, b) => morton(Math.floor(a.ll[0] * kx / 20) & 0xffff, Math.floor(a.ll[1] * ky / 20) & 0xffff) - morton(Math.floor(b.ll[0] * kx / 20) & 0xffff, Math.floor(b.ll[1] * ky / 20) & 0xffff));
     let worstLoss = 0, feeder = 0, dist = 0, over = 0, splitters = 0, ports = 0;
-    cabs.forEach(cab => {
+    let straight = 0; const cabPaths = FT.roads.pathsFrom(olt.ll, cabs.map(c => c.ll));
+    cabs.forEach((cab, ci) => {
       cab.nsplit = Math.ceil(cab.fdbs.length / s1); splitters += cab.nsplit; ports += cab.nsplit;
-      cab.path = FT.roads.path(olt.ll, cab.ll) || [olt.ll, cab.ll]; cab.len = FT.pathLen(cab.path); feeder += cab.len; cab.cat = D.feederCat(cab.nsplit);
-      cab.fdbs.forEach(f => {
-        f.path = FT.roads.path(cab.ll, f.ll) || [cab.ll, f.ll]; f.len = FT.pathLen(f.path); dist += f.len;
+      if (!cabPaths[ci]) straight++; cab.path = cabPaths[ci] || [olt.ll, cab.ll]; cab.len = FT.pathLen(cab.path); feeder += cab.len; cab.cat = D.feederCat(cab.nsplit);
+      const fp = FT.roads.pathsFrom(cab.ll, cab.fdbs.map(f => f.ll));
+      cab.fdbs.forEach((f, fi) => {
+        if (!fp[fi]) straight++; f.path = fp[fi] || [cab.ll, f.ll]; f.len = FT.pathLen(f.path); dist += f.len;
         const km = (cab.len + f.len + 100) / 1000; f.loss = FT.SPLITTER_LOSS['1:' + s1] + FT.SPLITTER_LOSS['1:' + s2] + km * B.fiber1490 + 6 * B.connector + 4 * B.splice; worstLoss = Math.max(worstLoss, f.loss); if (f.loss > FT.LIMITS.maxLoss) over++;
       });
     });
-    return { olt, cabs, s1, s2, homes: P.length, fdbCount: P.length, fdcCount: cabs.length, splitters, ports, feeder, dist, worstLoss, over, ok: over === 0 };
+    return { olt, cabs, s1, s2, straight, homes: P.length, fdbCount: P.length, fdcCount: cabs.length, splitters, ports, feeder, dist, worstLoss, over, ok: over === 0 };
   };
   D.preview = function (plan) {
     const f = []; plan.cabs.forEach(c => { f.push({ type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: c.path } }); f.push({ type: 'Feature', properties: {}, geometry: { type: 'Point', coordinates: c.ll } }); c.fdbs.forEach(x => { f.push({ type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: x.path } }); f.push({ type: 'Feature', properties: {}, geometry: { type: 'Point', coordinates: x.ll } }); }); });
@@ -92,7 +101,7 @@
         '<div class="kv"><span>' + (ar() ? 'منافذ PON في الـ OLT (ألياف التغذية)' : 'OLT PON ports (feeder fibres)') + '</span><b>' + plan.ports + '</b></div>' +
         '<div class="kv"><span>' + (ar() ? 'كبلات التغذية (OLT→FDC)' : 'Feeder cables (OLT→FDC)') + '</span><b>' + FT.lt(FT.fmtLenShort(plan.feeder)) + '</b></div><div class="kv"><span>' + (ar() ? 'كبلات التوزيع (FDC→FDB)' : 'Distribution (FDC→FDB)') + '</span><b>' + FT.lt(FT.fmtLenShort(plan.dist)) + '</b></div>' +
         '<div class="kv"><span>' + (ar() ? 'أسوأ فقد عند الـ ONT (الحد 28 dB)' : 'Worst loss at the ONT (limit 28 dB)') + '</span><b style="color:' + (plan.ok ? 'var(--ok)' : 'var(--bad)') + '">' + FT.lt(plan.worstLoss.toFixed(1) + ' dB') + '</b></div>' +
-        (plan.ok ? '' : '<div class="warnbox">' + (ar() ? plan.over + ' علبة FDB تتجاوز 28 dB — قرّب الـ OLT أو قلّل سعة الخزانة.' : plan.over + ' FDB exceed 28 dB — move the OLT closer or reduce the cabinet size.') + '</div>') +
+        (plan.straight ? '<div class="warnbox">' + (ar() ? plan.straight + ' مسار ما لقى شارعًا قريبًا فرُسم خطًا مستقيمًا — راجعه يدويًا (قد يمرّ فوق بيوت).' : plan.straight + ' route(s) found no street nearby and are straight lines — check them by hand (they may cross houses).') + '</div>' : '') + (plan.ok ? '' : '<div class="warnbox">' + (ar() ? plan.over + ' علبة FDB تتجاوز 28 dB — قرّب الـ OLT أو قلّل سعة الخزانة.' : plan.over + ' FDB exceed 28 dB — move the OLT closer or reduce the cabinet size.') + '</div>') +
         '<div class="warnbox" style="background:#12202e;border-color:#2a5a7a;color:#9ad0ff">' + (ar() ? 'تقدير تخطيطي: علبة FDB عند مدخل كل مبنى، الأنابيب والكبلات تتبع الشوارع. عدّل بعد التطبيق. Ctrl+Z يتراجع.' : 'Planning estimate: one FDB at the entrance of each building; pipes and cables follow the streets. Edit after applying. Ctrl+Z undoes it.') + '</div>';
     };
     U().modal(FT.t('t_design'), render(), [{ label: FT.t('close'), fn: () => { FT.map.setDraw([]); FT.T.setTool('select'); } }, { label: FT.t('an_apply'), cls: 'pri', fn: () => { FT.map.setDraw([]); FT._designHomes = 0; const n = D.apply(plan, { homes }); FT.T.setTool('select'); U().toast(n + ' ✓'); } }], function wire(root) {
