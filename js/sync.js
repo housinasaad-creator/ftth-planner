@@ -139,12 +139,14 @@
       if (g !== gen) return;
       if (r) {
         const res = apply(r.changes || [], false); Y.rev = Math.max(Y.rev, r.rev || 0); jset('ft2_rev_' + cur.id, Y.rev);
-        fixTwins(res.fresh); refreshUI(res); Y.peers = r.peers || []; drawPeers();
+        fixTwins(res.fresh); refreshUI(res); setPeers(r.peers); drawPeers();
         const sig = Y.peers.map(p => ((p.info || {}).u || p.client) + ':' + p.name).sort().join('|'); if (sig !== whoSig) { whoSig = sig; if (FT.UI) FT.UI.refreshTreeSoon(); } setOnline(true); if (r.more) wait = 30;
       }
     } catch (e) { if (g === gen) { setOnline(false); wait = 5000; } }
     if (g === gen) { pulling = false; pullSoon(wait); }
   }
+  // my own other tabs (and my session from before a reload) are me, not teammates
+  function setPeers(list) { const all = list || []; Y.peers = all.filter(p => (p.info || {}).u !== Y.uid()); Y.ownTabs = all.length - Y.peers.length; }
   function setOnline(v) { if (Y.online !== v) { Y.online = v; drawPanel(); } }
 
   // ---------------- start / stop ----------------
@@ -166,7 +168,7 @@
     if (first) {
       let r = first;
       for (;;) { apply(r.changes || [], true); Y.rev = Math.max(Y.rev, r.rev || 0); if (!r.more) break; r = await request(Y.rev, {}); if (g !== gen) return 'legacy'; }
-      Y.peers = first.peers || [];
+      setPeers(first.peers);
     } else { Y.rev = jget('ft2_rev_' + cur.id, 0); out = 'offline'; Y.online = false; }
     if (mode === 'edit') jget(QK(), []).forEach(([k, v]) => { const [c, i] = split(k); put(c, i, v === null ? null : JSON.parse(v)); const now = payload(c, i); if (now === undefined) shadow.delete(k); else shadow.set(k, now); queue.set(k, v); });
     jset('ft2_rev_' + cur.id, Y.rev);
@@ -286,6 +288,7 @@
     const rows = Y.peers.map(p => '<div class="tm"><i style="background:' + colorOf((p.info || {}).u || p.client) + '"></i><span>' + esc(p.name) + (p.mode === 'view' ? ' <small>' + (ar ? 'يشاهد' : 'watching') + '</small>' : '') + ((p.info || {}).away ? ' <small>' + (ar ? 'بتبويب آخر' : 'another tab') + '</small>' : '') + '</span><button data-go="' + esc(p.client) + '">' + (ar ? 'روح لعنده' : 'Go there') + '</button></div>').join('');
     const html = '<div class="tm me"><i style="background:' + colorOf(Y.uid()) + '"></i><span>' + esc(Y.name()) + ' <small>' + (ar ? 'أنت' : 'you') + '</small></span><button id="teamName">' + (ar ? 'تغيير الاسم' : 'Rename') + '</button></div>' +
       (rows || '<div class="tm none">' + (ar ? 'ما في حدا غيرك فاتح المشروع هلأ. ابعت رابط التعديل أو المشاهدة من زر المشاركة.' : 'Nobody else has the project open. Send the edit or view link from Share.') + '</div>') +
+      (Y.ownTabs ? '<div class="tm none">' + (ar ? 'عندك تبويب آخر مفتوح على نفس المشروع. هو أنت، لذلك لا يُعدّ ضمن الفريق.' : 'You have another tab open on this project. It is you, so it is not counted in the team.') + '</div>' : '') +
       (Y.online ? '' : '<div class="tm none">' + (ar ? 'الاتصال مقطوع: تعديلاتك محفوظة على جهازك وبتنبعت لما يرجع النت.' : 'Offline: your changes are kept and sent when the connection returns.') + '</div>');
     if (html !== lastPanel || !box.firstChild) { box.innerHTML = html; lastPanel = html; }
   }

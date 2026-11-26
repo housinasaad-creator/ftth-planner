@@ -275,8 +275,8 @@
     const rs = $('#roadSnap'); if (rs) rs.onchange = () => { FT.roads.on = rs.checked; };
     const pc = $('#pipeCat'); if (pc) pc.onchange = () => O.pipeCat = pc.value; const cc = $('#cableCat'); if (cc) cc.onchange = () => O.cableCat = cc.value;
     body.querySelectorAll('#mediumSeg button').forEach(b => b.onclick = () => { O.medium = b.dataset.m; UI.renderPanel(); });
-    body.querySelectorAll('#numMode button').forEach(b => b.onclick = () => { T().num.mode = b.dataset.m; T().setTool('number'); });
-    const np = $('#numPfx'); if (np) np.oninput = () => T().num.prefix = np.value; const nn = $('#numNext'); if (nn) nn.oninput = () => { const v = parseInt(String(nn.value).replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d)), 10); if (v > 0) T().num.next = v; }; const no = $('#numOrder'); if (no) no.onchange = () => T().num.order = no.value;
+    body.querySelectorAll('#numMode button').forEach(b => b.onclick = () => { T().num.mode = b.dataset.m; T().cancel(true); T().draw = null; FT.map.setDraw([]); UI.toolChanged(); }); // the tool stays on: setTool() on the active tool would switch it off
+    const np = $('#numPfx'); if (np) np.oninput = () => { T().num.prefix = np.value; const nx = $('#numNext'); if (nx) nx.value = FT.num.syncNext(); }; const nn = $('#numNext'); if (nn) nn.oninput = () => { const v = parseInt(String(nn.value).replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d)), 10); if (v > 0) { T().num.next = v; T().num.from = v; T().num.fromPfx = T().num.prefix || ''; } }; const no = $('#numOrder'); if (no) no.onchange = () => T().num.order = no.value;
     const nc = $('#numClear'); if (nc) nc.onclick = () => FT.T.startShape('poly', ring => FT.num.clearIn(ring), t('num_hint_auto'));
     const fl = $('#flN'); if (fl) fl.oninput = () => { const v = parseInt(String(fl.value).replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d)), 10); if (v > 0) O.floors = v; };
   };

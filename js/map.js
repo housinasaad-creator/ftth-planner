@@ -58,6 +58,8 @@
     map.addControl(new maplibregl.AttributionControl({ compact: true, customAttribution: 'Buildings © Microsoft (ODbL) · Map data © OpenStreetMap contributors · OpenFreeMap' }), 'bottom-right');
     map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), 'bottom-right');
     map.addControl(new maplibregl.ScaleControl({ unit: 'metric' }), 'bottom-left');
+    // the free base map asks for a few place icons it does not ship: give it a blank one instead of a console warning
+    map.on('styleimagemissing', e => { if (e.id && !/^i-/.test(e.id) && !map.hasImage(e.id)) map.addImage(e.id, { width: 1, height: 1, data: new Uint8Array(4) }); });
     await new Promise(res => map.on('load', res));
     const layers = map.getStyle().layers;
     if (map.getLayer('building-3d')) map.removeLayer('building-3d'); // OSM 3D replaced by our footprint layer

@@ -8,12 +8,22 @@
   N.label = lab;
 
   function ensure(id) { const S = FT.state; return S.bld[id] = S.bld[id] || {}; }
+  // next number = the highest number really on the map (same prefix) + 1, and never below a start number the user typed.
+  // Computed from the project itself, so undo, delete and teammates' numbering are always taken into account.
+  N.syncNext = function () {
+    const o = FT.T.num, pfx = o.prefix || '', bld = FT.state.bld || {}; let max = 0;
+    for (const id in bld) { const b = bld[id]; if (b.num && !b.deleted && (b.pfx || '') === pfx && +b.num > max) max = +b.num; }
+    o.next = Math.max(max + 1, o.from && (o.fromPfx || '') === pfx ? o.from : 1); return o.next;
+  };
+  FT.onChange(why => { if (why !== 'move' && FT.T.num) { const before = FT.T.num.next; if (N.syncNext() !== before && FT.UI && FT.UI.numChanged) FT.UI.numChanged(); } });
 
   N.clickBuilding = function (e, p) {
     const h = FT.T.hit(e); const id = h && h.kind === 'bld' ? h.id : FT.map.buildingAt(p); if (!id) { U().toast('Click a building'); return; }
-    const o = FT.T.num; FT.commit();
+    const o = FT.T.num;
+    if (!e.originalEvent.shiftKey && (FT.state.bld[id] || {}).num) { FT.T.select('bld', id); U().tab('tool'); return; } // already numbered: it keeps its number
+    FT.commit();
     if (e.originalEvent.shiftKey) { const had = (FT.state.bld[id] || {}).num; const re = FT.bedit.unnumber(id); if (had) U().toast((FT.lang === 'ar' ? 'أُزيل الرقم ' + had + ' · أُعيد ترقيم ' : 'Number ' + had + ' removed · renumbered ') + re); return; }
-    const b = ensure(id); b.num = o.next++; b.pfx = o.prefix || ''; const rg = FT.map.buildingRing(id) || b.fp; if (rg) b.ll = FT.centroid(rg); FT.changed('num'); U().numChanged(); FT.T.select('bld', id);
+    N.syncNext(); const b = ensure(id); b.num = o.next++; b.pfx = o.prefix || ''; const rg = FT.map.buildingRing(id) || b.fp; if (rg) b.ll = FT.centroid(rg); FT.changed('num'); U().numChanged(); FT.T.select('bld', id); U().tab('tool'); // stay on the numbering panel
   };
   N.clickFloors = function (e, p) {
     const h = FT.T.hit(e); const id = h && h.kind === 'bld' ? h.id : FT.map.buildingAt(p); if (!id) return;
@@ -46,7 +56,7 @@
           const dx = best.x - cur.x, dy = best.y - cur.y, d = Math.hypot(dx, dy) || 1; hx = dx / d; hy = dy / d; left.delete(best); order.push(best); cur = best;
         }
       }
-      FT.commit(); order.forEach(p => { const b = ensure(p.id); b.num = o.next++; b.pfx = o.prefix || ''; b.ll = p.c; });
+      FT.commit(); N.syncNext(); order.forEach(p => { const b = ensure(p.id); b.num = o.next++; b.pfx = o.prefix || ''; b.ll = p.c; });
       FT.changed('num'); U().numChanged(); U().toast(FT.t('num_done') + ' ' + order.length + ' ' + FT.t('bld_n'));
     });
   };
