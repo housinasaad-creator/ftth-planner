@@ -195,6 +195,7 @@
   }
 
   // node dragging
+  T.MOVE_MAX_M = 50; // metres under a 100 px scale bar; zoomed out further than this, elements cannot be dragged
   function onDown(e) {
     if (T.tool !== 'select' || e.originalEvent.button !== 0) return;
     const bx = [[e.point.x - 8, e.point.y - 8], [e.point.x + 8, e.point.y + 8]];
@@ -210,6 +211,14 @@
     }
     const h = hit(e); if (!h || h.kind !== 'node') return;
     if (T.locked.has(h.id)) return;
+    /* A dense network covers the whole screen: grabbing the first element under the cursor made it impossible to pan the map (and moved elements by accident).
+       An element is grabbed at once only when it is already selected, part of the selection, or the map is zoomed in; otherwise the drag pans the map (click it first, then drag). */
+    /* Housin's rule: elements can be moved only when zoomed in (scale bar of 100 px <= 50 m). Zoomed out, a drag always pans the map. */
+    const mpp = 156543.03 * Math.cos(map.getCenter().lat * Math.PI / 180) / Math.pow(2, map.getZoom());
+    if (mpp * 100 > T.MOVE_MAX_M) {
+      if (T.sel && T.sel.kind === 'node' && T.sel.id === h.id && Date.now() - (T._mvToast || 0) > 4000) { T._mvToast = Date.now(); U().toast(FT.lang === 'ar' ? 'قرّب أكتر لتحريك العناصر (السكيل أقل من 50 م)' : 'Zoom in to move elements (scale under 50 m)'); }
+      return;
+    }
     T.select('node', h.id); dragging = { id: h.id, moved: false, start: ll(e) }; map.dragPan.disable();
   }
   let impTick = 0;
