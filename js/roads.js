@@ -9,10 +9,10 @@
   const kx = lat => Math.cos(lat * Math.PI / 180) * 111320, ky = 110540;
 
   R.build = function () {
-    const m = FT.map && FT.map.map; if (!m) return null;
+    const m = FT.map && FT.map.map; if (!m && !R._lines) return null;
     const nodes = [], idx = {}, adj = [], segs = [], seen = new Set();
     const nid = p => { const k = key(p); let i = idx[k]; if (i == null) { i = idx[k] = nodes.length; nodes.push(p); adj.push([]); } return i; };
-    const feats = m.querySourceFeatures('openmaptiles', { sourceLayer: 'transportation' }) || [];
+    const feats = R._lines || m.querySourceFeatures('openmaptiles', { sourceLayer: 'transportation' }) || [];
     feats.forEach(f => {
       if (!f.geometry || SKIP[f.properties.class]) return;
       const lines = f.geometry.type === 'LineString' ? [f.geometry.coordinates] : f.geometry.type === 'MultiLineString' ? f.geometry.coordinates : [];
@@ -29,7 +29,7 @@
   const CELL = 25;
   // footprints of the buildings loaded on the map (grid of bounding boxes)
   R.buildBuildings = function () {
-    const KX = kx(34.73), grid = new Map(); ((FT.map && FT.map.bldFeats) || []).forEach(f => { const ring = f.geometry.coordinates[0]; let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9; ring.forEach(p => { x0 = Math.min(x0, p[0]); x1 = Math.max(x1, p[0]); y0 = Math.min(y0, p[1]); y1 = Math.max(y1, p[1]); });
+    const KX = kx(34.73), grid = new Map(); (R._blds || (FT.map && FT.map.bldFeats) || []).forEach(f => { const ring = f.geometry.coordinates[0]; let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9; ring.forEach(p => { x0 = Math.min(x0, p[0]); x1 = Math.max(x1, p[0]); y0 = Math.min(y0, p[1]); y1 = Math.max(y1, p[1]); });
       const it = { id: f.properties.id, ring, bb: [x0, y0, x1, y1] }; for (let cx = Math.floor(x0 * KX / CELL); cx <= Math.floor(x1 * KX / CELL); cx++) for (let cy = Math.floor(y0 * ky / CELL); cy <= Math.floor(y1 * ky / CELL); cy++) { const k = cx + ',' + cy; let l = grid.get(k); if (!l) grid.set(k, l = []); l.push(it); } });
     R.bgrid = { grid, KX };
   };
@@ -53,6 +53,12 @@
     c = label(); let main = 0; c.sz.forEach((v, k) => { if (v > c.sz[main]) main = k; });
     return { id: c.id, main };
   }
+  // plain copy of what the worker needs (street lines + building rings)
+  R.snapshot = function () {
+    const m = FT.map.map, lines = (m.querySourceFeatures('openmaptiles', { sourceLayer: 'transportation' }) || []).filter(f => f.geometry && !SKIP[f.properties.class] && (f.geometry.type === 'LineString' || f.geometry.type === 'MultiLineString')).map(f => ({ geometry: { type: f.geometry.type, coordinates: f.geometry.coordinates }, properties: { class: f.properties.class } }));
+    const blds = ((FT.map && FT.map.bldFeats) || []).map(f => ({ geometry: { coordinates: [f.geometry.coordinates[0]] }, properties: { id: f.properties.id } }));
+    return { lines, blds, on: R.on };
+  };
   R.graph = function () { return (R.dirty || !R.g) ? R.build() : R.g; };
   R.init = function () { const m = FT.map.map; const d = () => { R.dirty = true; }; m.on('sourcedata', e => { if (e.sourceId === 'openmaptiles' && e.isSourceLoaded) d(); }); m.on('moveend', d); };
 

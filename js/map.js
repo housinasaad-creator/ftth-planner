@@ -86,8 +86,8 @@
     map.addLayer({ id: 'hov-line', type: 'line', source: 'hov', paint: { 'line-color': '#ff6a3d', 'line-width': 2.2 } });
     // network
     ['pipes', 'cables', 'nodes', 'draw', 'sel', 'wd', 'wl', 'imp', 'impv', 'bh'].forEach(s => map.addSource(s, { type: 'geojson', data: EMPTY, promoteId: 'id' }));
-    map.addLayer({ id: 'pipes-case', type: 'line', source: 'pipes', paint: { 'line-color': '#07090d', 'line-width': ['interpolate', ['linear'], ['zoom'], 10, 3, 18, 8], 'line-opacity': 0.55 } });
-    map.addLayer({ id: 'pipes', type: 'line', source: 'pipes', layout: { 'line-sort-key': ['coalesce', ['get', 'z'], 0] }, paint: { 'line-color': ['coalesce', ['get', 'color'], '#2aa8ff'], 'line-width': ['interpolate', ['linear'], ['zoom'], 10, 1.6, 18, 5], 'line-dasharray': ['case', ['==', ['get', 'aerial'], 1], ['literal', [2, 1.5]], ['literal', [1, 0]]] } });
+    map.addLayer({ id: 'pipes-case', type: 'line', source: 'pipes', minzoom: 15, paint: { 'line-color': '#07090d', 'line-width': ['interpolate', ['linear'], ['zoom'], 10, 3, 18, 8], 'line-opacity': 0.55 } });
+    map.addLayer({ id: 'pipes', type: 'line', source: 'pipes', minzoom: 15, layout: { 'line-sort-key': ['coalesce', ['get', 'z'], 0] }, paint: { 'line-color': ['coalesce', ['get', 'color'], '#2aa8ff'], 'line-width': ['interpolate', ['linear'], ['zoom'], 10, 1.6, 18, 5], 'line-dasharray': ['case', ['==', ['get', 'aerial'], 1], ['literal', [2, 1.5]], ['literal', [1, 0]]] } });
     map.addLayer({ id: 'cables', type: 'line', source: 'cables', layout: { 'line-cap': 'round', 'line-join': 'round', 'line-sort-key': ['coalesce', ['get', 'z'], 0] }, paint: { 'line-color': ['get', 'color'], 'line-width': ['interpolate', ['linear'], ['zoom'], 10, 1.4, 18, 3.6], 'line-offset': ['interpolate', ['linear'], ['zoom'], 10, 0, 18, 4] } });
     map.addLayer({ id: 'imp-fill', type: 'fill', source: 'imp', filter: ['==', ['geometry-type'], 'Polygon'], paint: { 'fill-color': '#3bd18b', 'fill-opacity': 0.18 } });
     map.addLayer({ id: 'imp-line', type: 'line', source: 'imp', filter: ['any', ['==', ['geometry-type'], 'LineString'], ['==', ['geometry-type'], 'Polygon']], paint: { 'line-color': '#7ad7ff', 'line-width': 2 } });
@@ -110,6 +110,7 @@
     map.on('moveend', M.scheduleBuildings); map.on('zoomend', M.scheduleBuildings);
     M.ready = true; M.scheduleBuildings(); M.renderNet();
     FT.onChange(why => M.renderNet(why));
+    map.on('zoomend', () => { if (M._pipesDirty && !M.netHidden && map.getZoom() >= 15) M.renderNet(['lod']); });
     return map;
   };
   M.firstBaseLayerAbove = () => { const l = map.getStyle().layers.find(x => x.type === 'line' || x.type === 'symbol'); return l && l.id; };
@@ -210,20 +211,28 @@
 
   // ---------------- network render ----------------
   const CABLE_COL = { Backbone: '#b57bff', Feeder: '#b57bff', Distribution: '#35e0c9', Drop: '#d4ff4a' };
-  const NO_BLD = new Set(['move', 'prop', 'add', 'delete', 'order', 'folder', 'import', 'prices', 'reconnect', 'codes', 'splice']); // changes that cannot alter the building layer
+  const NO_BLD = new Set(['move', 'prop', 'add', 'delete', 'order', 'folder', 'import', 'prices', 'reconnect', 'codes', 'splice', 'lod']); // changes that cannot alter the building layer
   M.renderNet = function (why) { // coalesced: many changes in one frame render once
     (M._why = M._why || []).push(why); if (M._raf) return;
     M._raf = (window.requestAnimationFrame || (f => setTimeout(f, 16)))(() => { M._raf = 0; const w = M._why; M._why = []; M.renderNetNow(w); });
   };
   M.renderNetNow = function (why) {
     if (!M.ready) return; const S = FT.state, needBld = !why || !why.length || why.some(x => !NO_BLD.has(x));
-    const zN = FT.zOrder('nodes'), zP = FT.zOrder('pipes'), zC = FT.zOrder('cables');
+    // level of detail: pipes are drawn from zoom 15 only, and a hidden network is not rebuilt at all (it refreshes the moment it shows again)
+    if (M.netHidden) { M._pipesDirty = M._netDirty = true; if (FT.wl) FT.wl.render(); if (FT.imp) FT.imp.render(); if (needBld && M.rebuildBuildingData && M.bldFeats) M.rebuildBuildingData(); return; }
+    const zN = FT.zOrder('nodes'), zP = FT.zOrder('pipes'), zC = FT.zOrder('cables'), showPipes = map.getZoom() >= 15;
+    M._netDirty = false;
     map.getSource('nodes').setData({ type: 'FeatureCollection', features: Object.values(S.nodes).map(n => ({ type: 'Feature', id: n.id, properties: { id: n.id, type: n.type, name: n.name, lab: n.name.replace(/^(F\d+)-(PS\d+)-(P\d+)-D\d+-FDB\d+$/, '$1·$2·$3'), z: zN[n.id] || 0 }, geometry: { type: 'Point', coordinates: n.ll } })).concat(Object.values(S.splices).map(sp => { const n = S.nodes[sp.node]; return n ? { type: 'Feature', id: sp.id, properties: { id: sp.id, type: 'splice', name: sp.label || '' }, geometry: { type: 'Point', coordinates: [n.ll[0] + 0.00003, n.ll[1] + 0.00003] } } : null; }).filter(Boolean)) });
-    map.getSource('pipes').setData({ type: 'FeatureCollection', features: Object.values(S.pipes).map(p => ({ type: 'Feature', id: p.id, properties: { id: p.id, z: zP[p.id] || 0, color: p.color || null, aerial: p.ptype === 'aerial' ? 1 : 0 }, geometry: { type: 'LineString', coordinates: p.pts } })) });
+    if (showPipes) { M._pipesDirty = false; map.getSource('pipes').setData({ type: 'FeatureCollection', features: Object.values(S.pipes).map(p => ({ type: 'Feature', id: p.id, properties: { id: p.id, z: zP[p.id] || 0, color: p.color || null, aerial: p.ptype === 'aerial' ? 1 : 0 }, geometry: { type: 'LineString', coordinates: p.pts } })) }); } else M._pipesDirty = true;
     map.getSource('cables').setData({ type: 'FeatureCollection', features: Object.values(S.cables).map(c => { const pts = [].concat(...FT.cableSpans(c).map((s, i) => i ? s.pts.slice(1) : s.pts)); const g = (FT.CABLE_CAT.find(x => x.id === c.cat) || {}).group || 'Feeder'; return { type: 'Feature', id: c.id, properties: { id: c.id, z: zC[c.id] || 0, color: c.color || CABLE_COL[g] }, geometry: { type: 'LineString', coordinates: pts.length > 1 ? pts : (c.pts || []) } }; }) });
     if (FT.wl) FT.wl.render();
     if (FT.imp) FT.imp.render();
     if (needBld && M.rebuildBuildingData && M.bldFeats) M.rebuildBuildingData();
+  };
+  M.netLayers = () => map.getStyle().layers.filter(l => l.source === 'nodes' || l.source === 'pipes' || l.source === 'cables').map(l => l.id);
+  M.setNetHidden = function (v) {
+    M.netHidden = !!v; M.netLayers().forEach(id => map.setLayoutProperty(id, 'visibility', v ? 'none' : 'visible'));
+    if (!v) M.renderNetNow(['lod']);
   };
   M.setSelection = function (kind, id) {
     const S = FT.state; let f = [];

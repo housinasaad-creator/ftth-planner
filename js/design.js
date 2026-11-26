@@ -56,6 +56,27 @@
     });
     return { olt, cabs, s1, s2, straight, homes: P.length, fdbCount: P.length, fdcCount: cabs.length, splitters, ports, feeder, dist, worstLoss, over, ok: over === 0 };
   };
+  // ---- the same planning, but on a background thread (the page keeps moving while it computes) ----
+  let W; const wait = new Map(); let wid = 0; D.useWorker = true;
+  function getWorker() {
+    if (W !== undefined) return W;
+    try {
+      W = new Worker('js/worker.js');
+      W.onmessage = e => { const m = e.data, p = wait.get(m.id); if (!p) return; wait.delete(m.id); m.err ? p.rej(new Error(m.err)) : p.res(m); };
+      W.onerror = () => { const all = [...wait.values()]; wait.clear(); W = null; all.forEach(p => p.rej(new Error('worker'))); };
+    } catch (e) { W = null; }
+    return W;
+  }
+  const call = msg => new Promise((res, rej) => { const w = getWorker(); if (!w) return rej(new Error('noworker')); const id = ++wid; wait.set(id, { res, rej }); w.postMessage(Object.assign({ id }, msg)); });
+  D.workerReset = () => { D._loaded = false; };
+  D.planAsync = async function (blds, olt, opt) {
+    if (!D.useWorker || !getWorker()) return D.plan(blds, olt, opt);
+    try {
+      if (!D._loaded) { await call(Object.assign({ t: 'load' }, FT.roads.snapshot())); D._loaded = true; }
+      const r = await call({ t: 'plan', on: FT.roads.on, blds, olt: { id: olt.id, ll: olt.ll }, opt });
+      r.plan.olt = olt; return r.plan;
+    } catch (e) { return D.plan(blds, olt, opt); }
+  };
   D.preview = function (plan) {
     const f = []; plan.cabs.forEach(c => { f.push({ type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: c.path } }); f.push({ type: 'Feature', properties: {}, geometry: { type: 'Point', coordinates: c.ll } }); c.fdbs.forEach(x => { f.push({ type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: x.path } }); f.push({ type: 'Feature', properties: {}, geometry: { type: 'Point', coordinates: x.ll } }); }); });
     FT.map.setDraw(f);
@@ -90,25 +111,29 @@
     if (!olts.length) { U().toast(ar() ? 'ضع OLT أولًا ثم أعد المحاولة' : 'Place an OLT first, then try again'); FT.T.setTool('select'); return; }
     await FT.map.ensureTiles(FT.bboxOf(ring)); const blds = FT.map.buildingsInRing(ring);
     if (!blds.length) { U().toast(FT.t('dxf_none')); FT.T.setTool('select'); return; }
-    let oltId = olts[0].id, homes = false, plan = null, sp = 0, cab = 48;
+    let oltId = olts[0].id, homes = false, plan = null, sp = 0, cab = 48, busy = true, tok = 0, again = () => {}; D.workerReset();
     const render = () => {
-      plan = D.plan(blds, FT.state.nodes[oltId], { s1: D.SPLITS[sp][0], s2: D.SPLITS[sp][1], cab }); D.preview(plan);
       return '<div class="f"><label>OLT</label><select id="dsOlt">' + olts.map(o => '<option value="' + o.id + '"' + (o.id === oltId ? ' selected' : '') + '>' + o.name + '</option>').join('') + '</select></div>' +
         '<div class="two"><div class="f"><label>' + FT.t('ds_split') + '</label><select id="dsSplit">' + D.SPLITS.map((s, i) => '<option value="' + i + '"' + (i === sp ? ' selected' : '') + '>1:' + s[0] + ' (FDC) + 1:' + s[1] + ' (FDB) = 1:' + s[0] * s[1] + '</option>').join('') + '</select></div>' +
         '<div class="f"><label>' + FT.t('ds_cab') + '</label><input id="dsCab" type="text" inputmode="numeric" value="' + cab + '"></div></div>' +
-        '<div class="fl"><input type="checkbox" id="dsHomes"' + (homes ? ' checked' : '') + '><span>' + (ar() ? 'ارسم كبل مشترك لكل مبنى (للتخطيط فقط — خارج نطاق المقاول)' : 'Draw a drop cable to each building (planning only — outside the contractor scope)') + '</span></div>' +
+        '<div class="fl"><input type="checkbox" id="dsHomes"' + (homes ? ' checked' : '') + '><span>' + (ar() ? 'ارسم كبل مشترك لكل مبنى (للتخطيط فقط — خارج نطاق المقاول)' : 'Draw a drop cable to each building (planning only — outside the contractor scope)') + '</span></div>' + (busy || !plan ? '<div class="warnbox" style="background:#12202e;border-color:#2a5a7a;color:#9ad0ff">⏳ ' + (ar() ? 'جاري حساب التصميم بالخلفية… الخريطة تضل شغالة.' : 'Computing the design in the background… the map stays usable.') + '</div>' : (
         '<div class="kv"><span>' + FT.t('buildings') + ' = FDB</span><b>' + plan.fdbCount + '</b></div><div class="kv"><span>FDC</span><b>' + plan.fdcCount + ' · ' + plan.splitters + ' × 1:' + plan.s1 + '</b></div>' +
         '<div class="kv"><span>' + (ar() ? 'منافذ PON في الـ OLT (ألياف التغذية)' : 'OLT PON ports (feeder fibres)') + '</span><b>' + plan.ports + '</b></div>' +
         '<div class="kv"><span>' + (ar() ? 'كبلات التغذية (OLT→FDC)' : 'Feeder cables (OLT→FDC)') + '</span><b>' + FT.lt(FT.fmtLenShort(plan.feeder)) + '</b></div><div class="kv"><span>' + (ar() ? 'كبلات التوزيع (FDC→FDB)' : 'Distribution (FDC→FDB)') + '</span><b>' + FT.lt(FT.fmtLenShort(plan.dist)) + '</b></div>' +
         '<div class="kv"><span>' + (ar() ? 'أسوأ فقد عند الـ ONT (الحد 28 dB)' : 'Worst loss at the ONT (limit 28 dB)') + '</span><b style="color:' + (plan.ok ? 'var(--ok)' : 'var(--bad)') + '">' + FT.lt(plan.worstLoss.toFixed(1) + ' dB') + '</b></div>' +
         (plan.straight ? '<div class="warnbox">' + (ar() ? plan.straight + ' مسار ما لقى شارعًا قريبًا فرُسم خطًا مستقيمًا — راجعه يدويًا (قد يمرّ فوق بيوت).' : plan.straight + ' route(s) found no street nearby and are straight lines — check them by hand (they may cross houses).') + '</div>' : '') + (plan.ok ? '' : '<div class="warnbox">' + (ar() ? plan.over + ' علبة FDB تتجاوز 28 dB — قرّب الـ OLT أو قلّل سعة الخزانة.' : plan.over + ' FDB exceed 28 dB — move the OLT closer or reduce the cabinet size.') + '</div>') +
-        '<div class="warnbox" style="background:#12202e;border-color:#2a5a7a;color:#9ad0ff">' + (ar() ? 'تقدير تخطيطي: علبة FDB عند مدخل كل مبنى، الأنابيب والكبلات تتبع الشوارع. عدّل بعد التطبيق. Ctrl+Z يتراجع.' : 'Planning estimate: one FDB at the entrance of each building; pipes and cables follow the streets. Edit after applying. Ctrl+Z undoes it.') + '</div>';
+        '<div class="warnbox" style="background:#12202e;border-color:#2a5a7a;color:#9ad0ff">' + (ar() ? 'تقدير تخطيطي: علبة FDB عند مدخل كل مبنى، الأنابيب والكبلات تتبع الشوارع. عدّل بعد التطبيق. Ctrl+Z يتراجع.' : 'Planning estimate: one FDB at the entrance of each building; pipes and cables follow the streets. Edit after applying. Ctrl+Z undoes it.') + '</div>'));
     };
-    U().modal(FT.t('t_design'), render(), [{ label: FT.t('close'), fn: () => { FT.map.setDraw([]); FT.T.setTool('select'); } }, { label: FT.t('an_apply'), cls: 'pri', fn: () => { FT.map.setDraw([]); FT._designHomes = 0; const n = D.apply(plan, { homes }); FT.T.setTool('select'); U().toast(n + ' ✓'); } }], function wire(root) {
-      const again = () => { root.innerHTML = render(); wire(root); };
-      root.querySelector('#dsOlt').onchange = e => { oltId = e.target.value; again(); }; root.querySelector('#dsHomes').onchange = e => { homes = e.target.checked; };
-      root.querySelector('#dsSplit').onchange = e => { sp = +e.target.value; again(); };
-      root.querySelector('#dsCab').onchange = e => { const v = parseInt(String(e.target.value).replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d)), 10); if (v >= 4) cab = Math.min(v, 400); again(); };
+    const compute = () => { // the heavy part runs in the worker; stale answers are dropped
+      const my = ++tok; busy = true; plan = null; FT.map.setDraw([]); again();
+      D.planAsync(blds, FT.state.nodes[oltId], { s1: D.SPLITS[sp][0], s2: D.SPLITS[sp][1], cab }).then(p => { if (my !== tok) return; plan = p; busy = false; if (!document.getElementById('dsOlt')) return; D.preview(plan); again(); }).catch(() => { if (my !== tok) return; busy = false; plan = null; again(); });
+    };
+    U().modal(FT.t('t_design'), render(), [{ label: FT.t('close'), fn: () => { FT.map.setDraw([]); FT.T.setTool('select'); } }, { label: FT.t('an_apply'), cls: 'pri', fn: async () => { while (busy) await new Promise(r => setTimeout(r, 40)); FT.map.setDraw([]); if (!plan) return; FT._designHomes = 0; const n = D.apply(plan, { homes }); FT.T.setTool('select'); U().toast(n + ' ✓'); } }], function wire(root) {
+      again = () => { if (!document.getElementById('dsOlt')) return; root.innerHTML = render(); wire(root); };
+      root.querySelector('#dsOlt').onchange = e => { oltId = e.target.value; compute(); }; root.querySelector('#dsHomes').onchange = e => { homes = e.target.checked; };
+      root.querySelector('#dsSplit').onchange = e => { sp = +e.target.value; compute(); };
+      root.querySelector('#dsCab').onchange = e => { const v = parseInt(String(e.target.value).replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d)), 10); if (v >= 4) cab = Math.min(v, 400); compute(); };
     });
+    compute();
   };
 })(window);
