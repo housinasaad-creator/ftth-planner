@@ -379,13 +379,20 @@
       root.querySelectorAll('select[data-core]').forEach(s => s.onchange = () => { FT.commit(); if (s.value) sp.fus[s.dataset.core] = s.value; else delete sp.fus[s.dataset.core]; FT.changed('prop'); again(); });
     });
   };
+  let areaRing = null, areaSet = null; // the last area drawn for a report (used for the map in the printed report)
+  UI.reportArea = function () {
+    UI.closeModal();
+    T().startShape('poly', ring => { const m = T().collectIn(ring); if (!(m.nodes.size + m.pipes.size + m.cables.size)) { UI.toast(t('rp_area_empty')); return; } T().selectMulti(m); areaRing = ring; areaSet = m; UI.openReport(true); }, t('rp_area_hint'));
+  };
   UI.openReport = function (selected) {
     let scope = selected && T().multi ? T().multi : null;
+    const ringOf = () => scope && scope === areaSet ? areaRing : null;
     const draw = () => { const c = FT.cost(scope), badge = { cable: 'rp_cable', pipe: 'rp_pipe', node: 'rp_node', splitter: 'rp_node', splice: 'rp_splice', wdev: 'rp_node', labour: 'rp_pipe' };
-      return '<div class="seg" id="rpScope" style="margin-bottom:10px"><button data-s="all" class="' + (!scope ? 'on' : '') + '">' + t('scope_all') + '</button><button data-s="sel" class="' + (scope ? 'on' : '') + '">' + t('scope_sel') + '</button></div>' +
+      return '<div class="seg" id="rpScope" style="margin-bottom:10px"><button data-s="all" class="' + (!scope ? 'on' : '') + '">' + t('scope_all') + '</button><button data-s="sel" class="' + (scope ? 'on' : '') + '">' + t('scope_sel') + '</button><button data-s="area">⬠ ' + t('rp_area') + '</button></div>' +
+        (scope ? '<p class="d" style="margin:0 0 8px">' + (scope.nodes.size + scope.pipes.size + scope.cables.size ? t('rp_scope_n') + ' ' + scope.nodes.size + ' · ' + scope.pipes.size + ' · ' + scope.cables.size : t('rp_area_how')) + '</p>' : '') +
         (FT.hasPrices() ? '' : '<div class="warnbox">' + t('prices_not_set') + '</div>') + '<table class="t"><tr><th>' + t('qty') + '</th><th></th>' + (FT.hasPrices() ? '<th>' + t('unit_price') + '</th><th>' + t('cost_total') + '</th>' : '') + '</tr>' + c.lines.map(r => '<tr><td style="direction:ltr;white-space:nowrap">' + (r.unit === 'm' ? FT.fmtLen(r.qty) : r.qty) + '</td><td><span class="badge">' + t(badge[r.kind] || 'rp_node') + '</span>' + esc(r.name) + '</td>' + (FT.hasPrices() ? '<td>' + FT.money(r.price) + (r.unit === 'm' ? ' /m' : '') + '</td><td><b>' + FT.money(r.total) + '</b></td>' : '') + '</tr>').join('') +
         (FT.hasPrices() ? '<tr><td colspan="3" style="text-align:end"><b>' + t('project_cost') + '</b></td><td><b style="color:var(--ok);font-size:16px">' + FT.money(c.total) + '</b></td></tr>' : '') + '</table>' + (c.lines.length ? '' : '<div class="empty">—</div>'); };
-    UI.modal(t('report_title'), draw(), [{ label: t('prices_btn'), fn: () => UI.openPrices(), keep: false }, { label: t('rp_csv'), fn: () => FT.exp.reportCsv(scope), keep: true }, { label: t('rp_print'), cls: 'ok', fn: () => FT.exp.print(scope), keep: true }, { label: t('close') }], function wire(root) { root.querySelectorAll('#rpScope button').forEach(b => b.onclick = () => { scope = b.dataset.s === 'sel' ? (T().multi || { nodes: new Set(), pipes: new Set(), cables: new Set() }) : null; root.innerHTML = draw(); wire(root); }); });
+    UI.modal(t('report_title'), draw(), [{ label: t('prices_btn'), fn: () => UI.openPrices({ back: () => UI.openReport(!!scope) }), keep: true }, { label: t('rp_csv'), fn: () => FT.exp.reportCsv(scope), keep: true }, { label: t('rp_print'), cls: 'ok', fn: () => FT.rep.open(scope, ringOf()), keep: true }, { label: t('close') }], function wire(root) { root.querySelectorAll('#rpScope button').forEach(b => b.onclick = () => { if (b.dataset.s === 'area') return UI.reportArea(); scope = b.dataset.s === 'sel' ? (T().multi || { nodes: new Set(), pipes: new Set(), cables: new Set() }) : null; root.innerHTML = draw(); wire(root); }); });
   };
   UI.openIO = function () {
     UI.modal(t('io_title'), '<div class="seg"><button class="btn pri" id="ioSave">' + t('io_save') + '</button><button class="btn" id="ioLoad">' + t('io_load') + '</button><button class="btn" id="ioGeo">' + t('io_geo') + '</button><button class="btn" id="ioKmz">KMZ</button><button class="btn" id="ioGpkg">GeoPackage</button><button class="btn bad" id="ioReset">' + t('io_reset') + '</button></div>' +
@@ -433,7 +440,7 @@
       const num = v => { v = parseFloat(String(v).replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d)).replace(',', '.')); return isNaN(v) || v < 0 ? 0 : v; }, out = {};
       $$('[data-price]').forEach(i => { const path = i.dataset.price.split('.'); if (path.length === 1) out[path[0]] = num(i.value); else { (out[path[0]] = out[path[0]] || {})[path[1]] = num(i.value); } });
       const merged = Object.assign({}, FT.state.prices || {}, out); Object.keys(out).forEach(k => { if (typeof out[k] === 'object') merged[k] = Object.assign({}, (FT.state.prices || {})[k] || {}, out[k]); });
-      if (o.start) { await FT.store.create(($('#prName') && $('#prName').value.trim()) || o.name, o.type); FT.state.prices = merged; await FT.store.saveNow(); UI.afterProject(); } else { FT.commit(); FT.state.prices = merged; FT.changed('prices'); UI.toast(t('toast_saved')); }
+      if (o.start) { await FT.store.create(($('#prName') && $('#prName').value.trim()) || o.name, o.type); FT.state.prices = merged; await FT.store.saveNow(); UI.afterProject(); } else { FT.commit(); FT.state.prices = merged; FT.changed('prices'); UI.toast(t('toast_saved')); if (o.back) setTimeout(o.back, 0); }
     } }]));
   };
   UI.openShare = function () {

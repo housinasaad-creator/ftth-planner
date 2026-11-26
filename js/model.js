@@ -228,7 +228,7 @@
     Object.keys(nod).forEach(t => add('node', NN[t] || t, nod[t], 'pc', P.node[t] || 0));
     Object.keys(spl).forEach(r => add('splitter', 'Splitter ' + r, spl[r], 'pc', P.splitter[r] || 0));
     add('splice', 'Splice closure', Object.values(S.splices).filter(s => inS('nodes', s.node)).length, 'pc', P.splice);
-    const wd = {}; Object.values(S.wdev || {}).forEach(d => { wd[d.type] = (wd[d.type] || 0) + 1; }); Object.keys(wd).forEach(t => add('wdev', t.toUpperCase() + ' radio', wd[t], 'pc', P.wdev[t] || 0));
+    const wd = {}; Object.values(scope ? {} : (S.wdev || {})).forEach(d => { wd[d.type] = (wd[d.type] || 0) + 1; }); Object.keys(wd).forEach(t => add('wdev', t.toUpperCase() + ' radio', wd[t], 'pc', P.wdev[t] || 0));
     const pm = Object.values(pip).reduce((a, b) => a + b, 0), cm = Object.values(cab).reduce((a, b) => a + b, 0);
     add('labour', 'Pipe installation', pm, 'm', P.labour.pipe_m); add('labour', 'Cable installation', cm, 'm', P.labour.cable_m);
     return { lines, total: lines.reduce((a, l) => a + l.total, 0) };
