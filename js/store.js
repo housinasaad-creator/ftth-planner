@@ -48,6 +48,25 @@
     const live = await S.goLive(oldWay); if (live === 'legacy') await oldWay();
     return true;
   };
+  // ---------------- a project that lives only in this browser -> the cloud ----------------
+  S.isLocal = () => !!(S.cur && S.cur.key === 'local');
+  const sorted = o => Array.isArray(o) ? o.map(sorted) : (o && typeof o === 'object' ? Object.keys(o).sort().reduce((a, k) => (a[k] = sorted(o[k]), a), {}) : o); // the database does not keep key order
+  const fingerprint = s => JSON.stringify(sorted(['nodes', 'pipes', 'cables', 'splices', 'bld', 'subs', 'folders', 'fmap', 'wdev', 'wlinks', 'imports'].map(k => (s && s[k]) || {})));
+  S.upload = async function () {
+    if (!S.isLocal()) return { ok: false, why: 'not-local' };
+    const old = S.cur.id, st = FT.state; st.meta = st.meta || {}; const name = st.meta.name || S.cur.name || 'Homs', type = st.meta.type || S.cur.type || 'gpon';
+    const text = JSON.stringify(st); if (new Blob([text]).size > 7500000) return { ok: false, why: 'big' };
+    const sent = JSON.parse(text); let c, back;
+    try { c = await rpc('ftth_create_project', { p_name: name, p_type: type, p_state: sent }); back = await rpc('ftth_get_project', { p_id: c.id, p_key: c.edit_key }); }
+    catch (e) { return { ok: false, why: 'net', detail: String(e.message || e) }; }
+    if (!back || fingerprint(back.state) !== fingerprint(sent)) return { ok: false, why: 'verify' };
+    // the cloud copy is complete: now this browser switches to it, and only now the local-only copy goes away
+    setReg(reg().filter(x => x.id !== old)); upsertReg({ id: c.id, key: c.edit_key, viewKey: c.view_key, name, type, updated: Date.now(), mode: 'edit' });
+    localStorage.removeItem(CACHE(old)); localStorage.removeItem('ft2_t_' + old);
+    S.cur = { id: c.id, key: c.edit_key, viewKey: c.view_key, name, type }; S.mode = 'edit'; S.online = true; localStorage.setItem('ft2_last', c.id); cacheSet(CACHE(c.id), JSON.stringify(FT.state));
+    await S.goLive(); S.autosave();
+    return { ok: true };
+  };
   S.goLive = async function (beforeTeam) {
     if (!FT.sync || !S.cur || S.cur.key === 'local') return 'legacy';
     const res = await FT.sync.start(S.cur, S.mode, { beforeTeam });

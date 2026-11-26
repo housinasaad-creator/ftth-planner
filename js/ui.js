@@ -443,8 +443,25 @@
       if (o.start) { await FT.store.create(($('#prName') && $('#prName').value.trim()) || o.name, o.type); FT.state.prices = merged; await FT.store.saveNow(); UI.afterProject(); } else { FT.commit(); FT.state.prices = merged; FT.changed('prices'); UI.toast(t('toast_saved')); if (o.back) setTimeout(o.back, 0); }
     } }]));
   };
+  // a project that exists only in this browser: say it clearly and offer to upload it
+  UI.openUpload = function () {
+    const ar = FT.lang === 'ar', say = (a, e) => ar ? a : e;
+    const body = '<div class="warnbox">' + say('هذا المشروع محفوظ على هذا المتصفح فقط وغير موجود على السيرفر. إذا مُسحت بيانات المتصفح يضيع، ولا يمكن مشاركته مع الفريق.', 'This project is saved in this browser only, not on the server. Clearing the browser data loses it, and it cannot be shared with a team.') + '</div><p class="d">' + say('الرفع ينسخه إلى السحابة، ويتأكد أنه وصل كاملاً قبل أن يلمس النسخة الموجودة هنا. بعدها يصير له رابط مشاركة ويظهر قسم المستخدمين. أغلق أي تبويب آخر مفتوح على المخطط قبل الرفع.', 'Uploading copies it to the cloud and checks that it arrived complete before touching the copy here. It then gets share links and the Users section. Close other planner tabs first.') + '</p><p class="d" id="upMsg"></p>';
+    UI.modal(say('رفع المشروع للسحابة', 'Upload to the cloud'), body, [{ label: t('close') }, { label: '⬆ ' + say('ارفع المشروع للسحابة', 'Upload this project'), cls: 'pri', id: 'upGo', keep: true, fn: async () => {
+      const btn = $('#upGo'), msg = $('#upMsg'); btn.disabled = true; msg.textContent = say('عم يرفع ويتأكد…', 'Uploading and checking…');
+      const r = await FT.store.upload();
+      if (r.ok) { UI.closeModal(); UI.afterProject(); UI.toast(say('انرفع المشروع، وصار فيك تشاركه', 'Uploaded. You can share it now')); UI.openShare(); return; }
+      btn.disabled = false; msg.style.color = 'var(--bad)';
+      msg.textContent = r.why === 'big' ? say('المشروع أكبر من حد الرفع الحالي (8 ميغا). النسخة المحلية لم تتغير.', 'The project is above the current upload limit (8 MB). Your local copy is unchanged.') : r.why === 'verify' ? say('النسخة على السيرفر غير مطابقة، فلم أغير شيئاً هنا. جرّب مرة ثانية.', 'The server copy did not match, so nothing here was changed. Try again.') : say('ما قدرت أوصل للسيرفر. النسخة المحلية لم تتغير. تأكد من الإنترنت وجرّب مرة ثانية.', 'Could not reach the server. Your local copy is unchanged. Check the connection and try again.');
+    } }]);
+  };
+  UI.localBadge = function () { // always visible while the open project is local only
+    let b = $('#bLocal'); const share = $('#bShare'); if (!share) return;
+    if (!b) { b = document.createElement('button'); b.id = 'bLocal'; b.className = 'pill'; share.parentNode.insertBefore(b, share); b.onclick = () => UI.openUpload(); }
+    b.style.display = FT.store.isLocal() ? '' : 'none'; b.textContent = '⚠ ' + (FT.lang === 'ar' ? 'محلي فقط · ارفعه' : 'Local only · upload');
+  };
   UI.openShare = function () {
-    const L = FT.store.links(); if (!L) { UI.toast(FT.lang === 'ar' ? 'المشروع محلي فقط — لا يوجد رابط' : 'Local-only project — no link'); return; }
+    const L = FT.store.links(); if (!L) { if (FT.store.isLocal()) UI.openUpload(); else UI.toast(FT.lang === 'ar' ? 'افتح مشروعاً أولاً' : 'Open a project first'); return; }
     const row = (lab, url, hint) => '<div class="f"><label>' + lab + '</label><div style="display:flex;gap:6px"><input readonly value="' + esc(url) + '" style="direction:ltr"><button class="btn" data-copy="' + esc(url) + '">' + t('copy') + '</button></div><div class="d" style="margin-top:4px">' + hint + '</div></div>';
     UI.modal(t('share'), row(t('link_view'), L.view || '—', t('link_view_d')) + row(t('link_edit'), L.edit, t('link_edit_d')), [{ label: t('close') }], root => root.querySelectorAll('[data-copy]').forEach(b => b.onclick = () => { navigator.clipboard.writeText(b.dataset.copy).then(() => UI.toast(t('copied'))); }));
   };
@@ -453,7 +470,7 @@
     if (FT.store.mode === 'view') UI.toast(FT.lang === 'ar' ? 'وضع العرض فقط' : 'View-only mode');
     const type = (FT.state.meta && FT.state.meta.type) || (FT.store.cur && FT.store.cur.type) || 'gpon';
     $('#projTitle').textContent = (FT.state.meta.name || (FT.store.cur && FT.store.cur.name) || '—');
-    mode = 'infra'; UI.buildTabs(type); UI.buildToolbar(); UI.refreshTree(); UI.renderPanel(); FT.map.renderNet(); UI.applyHidden(); UI.fitAll();
+    mode = 'infra'; UI.localBadge(); UI.buildTabs(type); UI.buildToolbar(); UI.refreshTree(); UI.renderPanel(); FT.map.renderNet(); UI.applyHidden(); UI.fitAll();
   };
   UI.buildTabs = function (type) {
     const tabs = [['infra', t('tab_infra'), type !== 'wireless'], ['wireless', FT.lang === 'ar' ? 'لاسلكي' : 'Wireless', type !== 'gpon'], ['pon', t('tab_pon'), type !== 'wireless']].filter(x => x[2]);
