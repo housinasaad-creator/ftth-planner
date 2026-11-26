@@ -55,6 +55,7 @@
       dragRotate: true, pitchWithRotate: true, maxPitch: 75, doubleClickZoom: false,
     });
     map.boxZoom.disable(); // Shift+click is used by the planner (multi-select / remove number)
+    map.setMaxPitch(0); // the street map is strictly 2D (the 3D map has its own button)
     map.addControl(new maplibregl.AttributionControl({ compact: true, customAttribution: 'Buildings © Microsoft (ODbL) · Map data © OpenStreetMap contributors · OpenFreeMap' }), 'bottom-right');
     map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), 'bottom-right');
     map.addControl(new maplibregl.ScaleControl({ unit: 'metric' }), 'bottom-left');
@@ -71,19 +72,16 @@
     map.addSource('gov', { type: 'geojson', data: { type: 'FeatureCollection', features: BOUND.polygons.map(r => ({ type: 'Feature', geometry: { type: 'LineString', coordinates: r }, properties: {} })) } });
     map.addLayer({ id: 'gov-line', type: 'line', source: 'gov', paint: { 'line-color': '#ff6a3d', 'line-width': 2, 'line-dasharray': [3, 2] } }, firstSymbol);
     // satellite (optional)
-    map.addSource('sat', { type: 'raster', tiles: ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'], tileSize: 256, maxzoom: 19, attribution: 'Imagery © Esri' });
+    map.addSource('sat', { type: 'raster', tiles: ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'], tileSize: 256, maxzoom: 18 /* the official sharp imagery of Homs ends at level 18; level 19 is a soft or missing picture, so closer zoom stretches level 18 */, attribution: 'Imagery © Esri' });
     map.addLayer({ id: 'sat', type: 'raster', source: 'sat', layout: { visibility: 'none' } }, M.firstBaseLayerAbove());
     // buildings
     map.addSource('bld', { type: 'geojson', data: EMPTY, promoteId: 'id' });
     map.addLayer({ id: 'bld-3d', type: 'fill-extrusion', source: 'bld', minzoom: 14, paint: {
-      'fill-extrusion-color': ['case', ['boolean', ['feature-state', 'sel'], false], '#ff8a62', ['boolean', ['feature-state', 'hover'], false], '#ffc4a3', ['>', ['get', 'num'], 0], '#f2b28c', ['==', ['get', 'st'], 1], '#7ad7ff', '#d9d4cb'],
+      'fill-extrusion-color': ['case', ['==', ['get', 'st'], 1], '#7ad7ff', '#d9d4cb'], // only a background drawing: numbers, hover and selection live on the house icon
       'fill-extrusion-height': ['get', 'eh'], 'fill-extrusion-base': 0, 'fill-extrusion-opacity': 0.94, 'fill-extrusion-vertical-gradient': true } }, firstSymbol);
-    map.addLayer({ id: 'bld-num', type: 'symbol', source: 'bld', minzoom: 15.5, filter: ['>', ['get', 'num'], 0],
-      layout: { 'text-field': ['get', 'lab'], 'text-font': ['Noto Sans Bold'], 'text-size': ['interpolate', ['linear'], ['zoom'], 15.5, 10, 19, 18], 'text-allow-overlap': true, 'text-pitch-alignment': 'viewport' },
-      paint: { 'text-color': '#07090d', 'text-halo-color': '#fff6ee', 'text-halo-width': 2 } });
     // hide-the-drawing mode (satellite only): buildings invisible but still live (hover outline, click, numbers)
     map.addSource('hov', { type: 'geojson', data: EMPTY });
-    map.addLayer({ id: 'bld-out', type: 'line', source: 'bld', minzoom: 15, layout: { visibility: 'none' }, filter: ['any', ['>', ['get', 'num'], 0], ['==', ['get', 'st'], 1]], paint: { 'line-color': '#ff8a62', 'line-width': 1.4, 'line-opacity': 0.9 } });
+    map.addLayer({ id: 'bld-out', type: 'line', source: 'bld', minzoom: 15, layout: { visibility: 'none' }, filter: ['==', ['get', 'st'], 1], paint: { 'line-color': '#ff8a62', 'line-width': 1.4, 'line-opacity': 0.9 } });
     map.addLayer({ id: 'hov-fill', type: 'fill', source: 'hov', paint: { 'fill-color': '#ff6a3d', 'fill-opacity': 0.22 } });
     map.addLayer({ id: 'hov-line', type: 'line', source: 'hov', paint: { 'line-color': '#ff6a3d', 'line-width': 2.2 } });
     // network
@@ -105,11 +103,23 @@
     map.addLayer({ id: 'nodes', type: 'symbol', source: 'nodes', layout: { 'symbol-sort-key': ['coalesce', ['get', 'z'], 0], 'icon-image': ['concat', 'i-', ['get', 'type']], 'icon-size': ['interpolate', ['linear'], ['zoom'], 9, 0.24, 14, 0.36, 17, 0.46, 19, 0.58], 'icon-allow-overlap': true, 'icon-ignore-placement': true,
       'text-field': ['step', ['zoom'], '', 15.5, ['coalesce', ['get', 'lab'], ['get', 'name']]], 'text-font': ['Noto Sans Bold'], 'text-size': 10, 'text-offset': [0, 1.3], 'text-optional': true }, paint: { 'text-color': '#07090d', 'text-halo-color': '#ffffff', 'text-halo-width': 1.6 } });
     map.addLayer({ id: 'nodes-sel', type: 'circle', source: 'sel', filter: ['==', ['geometry-type'], 'Point'], paint: { 'circle-radius': 13, 'circle-color': 'rgba(255,255,255,0)', 'circle-stroke-color': '#ffffff', 'circle-stroke-width': 3 } });
+    FT.houses.addImages(map); map.addSource('houses', { type: 'geojson', data: EMPTY, promoteId: 'id' });
+    map.addLayer({ id: 'house-sel', type: 'circle', source: 'houses', minzoom: FT.houses.MINZ, paint: { 'circle-radius': 19, 'circle-color': ['case', ['boolean', ['feature-state', 'sel'], false], '#ff6a3d', '#ffc4a3'], 'circle-opacity': ['case', ['any', ['boolean', ['feature-state', 'sel'], false], ['boolean', ['feature-state', 'hover'], false]], 0.55, 0], 'circle-translate': [0, -19] } }, 'nodes');
+    map.addLayer({ id: 'house', type: 'symbol', source: 'houses', minzoom: FT.houses.MINZ, layout: { 'icon-image': ['concat', 'house-', ['to-string', ['get', 'fl']]], 'icon-anchor': 'bottom', 'icon-offset': ['case', ['!=', ['get', 'lab'], ''], ['literal', [0, -FT.houses.PLATE_LIFT]], ['literal', [0, -4]]], 'icon-size': ['interpolate', ['linear'], ['zoom'], 16.5, 0.7, 17.6, 0.92, 19.5, 1.35], 'icon-allow-overlap': true, 'icon-ignore-placement': true, 'symbol-sort-key': ['-', 0, ['get', 'y']] } }, 'nodes');
+    map.addSource('plates', { type: 'geojson', data: EMPTY, promoteId: 'id' });
+    map.addLayer({ id: 'house-num', type: 'symbol', source: 'plates', minzoom: FT.houses.MINZ, layout: { 'icon-image': 'house-plate', 'icon-text-fit': 'both', 'icon-text-fit-padding': [1, 3, 0, 3], 'text-field': ['get', 'lab'], 'text-font': ['Noto Sans Bold'],
+      'text-size': ['interpolate', ['linear'], ['zoom'], 16.5, 9.5, 17.6, 11, 19.5, 16], 'text-anchor': 'top', 'text-offset': [0, -1.45], 'icon-allow-overlap': true, 'text-allow-overlap': true, 'icon-ignore-placement': true, 'text-ignore-placement': true, 'symbol-sort-key': ['-', 0, ['get', 'y']] }, paint: { 'text-color': '#07090d' } }, 'nodes');
+    map.addSource('m3d', { type: 'geojson', data: EMPTY, promoteId: 'mid' });
+    map.addLayer({ id: 'm3d', type: 'fill-extrusion', source: 'm3d', minzoom: FT.houses.MINZ, paint: { 'fill-extrusion-color': ['case', ['boolean', ['feature-state', 'sel'], false], '#ffffff', ['boolean', ['feature-state', 'hover'], false], '#ffc4a3', ['get', 'c']], 'fill-extrusion-base': ['get', 'b'], 'fill-extrusion-height': ['get', 'h'], 'fill-extrusion-opacity': 1 } }, 'nodes');
+    map.moveLayer('house-num', 'nodes'); /* the number plates are drawn over the 3D models, never hidden behind them */
     map.addLayer({ id: 'impv-pt', type: 'circle', source: 'impv', minzoom: 17, paint: { 'circle-radius': 5.5, 'circle-color': '#ffffff', 'circle-stroke-color': '#ff6a3d', 'circle-stroke-width': 2 } });
     map.addLayer({ id: 'bh-box', type: 'line', source: 'bh', minzoom: 17, filter: ['==', ['geometry-type'], 'LineString'], paint: { 'line-color': '#ffffff', 'line-width': 1.6, 'line-dasharray': [2, 2] } });
     map.addLayer({ id: 'bh-vtx', type: 'circle', source: 'bh', minzoom: 17, filter: ['==', ['get', 'k'], 'vtx'], paint: { 'circle-radius': 4.5, 'circle-color': '#ffffff', 'circle-stroke-color': '#07090d', 'circle-stroke-width': 1.5 } });
     map.addLayer({ id: 'bh-pt', type: 'symbol', source: 'bh', minzoom: 17, filter: ['any', ['==', ['get', 'k'], 'edge'], ['==', ['get', 'k'], 'move']], layout: { 'icon-image': ['concat', 'i-', ['get', 'k'], 'h'], 'icon-size': 0.5, 'icon-rotate': ['coalesce', ['get', 'rot'], 0], 'icon-rotation-alignment': 'map', 'icon-allow-overlap': true, 'icon-ignore-placement': true } });
     map.on('moveend', M.scheduleBuildings); map.on('zoomend', M.scheduleBuildings);
+    let plateRaf = 0; map.on('move', () => { if (M.base !== '3d' || plateRaf) return; plateRaf = requestAnimationFrame(() => { plateRaf = 0; M.renderPlates(); }); });
+    // streets can arrive after the buildings: once the map is quiet, place the markers that were still waiting for a street (once per move)
+    let retry = false; map.on('moveend', () => { retry = true; }); map.on('idle', () => { if (retry && M._housesWaiting && FT.roads) { retry = false; FT.roads.dirty = true; M.rebuildHouses(); } });
     M.ready = true; M.scheduleBuildings(); M.renderNet();
     FT.onChange(why => M.renderNet(why));
     map.on('moveend', () => { // moved/zoomed out of the area that was built, or the cables just became visible: rebuild once
@@ -121,30 +131,30 @@
   M.firstBaseLayerAbove = () => { const l = map.getStyle().layers.find(x => x.type === 'line' || x.type === 'symbol'); return l && l.id; };
 
   // ---------------- basemap switch ----------------
-  M.hideBld = false; let hovId = null; // hideBld = user wish; it only takes effect on the satellite basemap
-  M.bldHiddenNow = () => M.hideBld && M.base === 'sat';
+  M.hideBld = false; M.hideHouses = false; let hovId = null; // user wishes; both work on all three basemaps
+  M.bldHiddenNow = () => M.hideBld;
   M.applyBldHidden = function () {
     const v = M.bldHiddenNow(); map.setPaintProperty('bld-3d', 'fill-extrusion-opacity', v ? 0 : 0.94); map.setLayoutProperty('bld-out', 'visibility', v ? 'visible' : 'none');
     if (!v) { hovId = null; map.getSource('hov').setData(EMPTY); }
+    map.getStyle().layers.forEach(l => { if (l['source-layer'] === 'building') map.setLayoutProperty(l.id, 'visibility', v || M.base === 'sat' ? 'none' : 'visible'); });
+    ['house', 'house-sel', 'house-num'].forEach(i => map.getLayer(i) && map.setLayoutProperty(i, 'visibility', M.hideHouses ? 'none' : 'visible'));
   };
-  M.setBldHidden = function (v) { M.hideBld = !!v; M.applyBldHidden(); };
+  M.setHousesHidden = function (v) { M.hideHouses = !!v; M.applyBldHidden(); M.flatIcons(); M.render3d(); };
+  M.setBldHidden = function (v) { M.hideBld = !!v; M.applyBldHidden(); M.render3d(); M.renderPlates(); if (FT.bedit) FT.bedit.refresh(); };
   let hoverB = null; // hover colour of a house: a feature-state (no data reload), only from zoom 15.5
   const hoverSet = id => { if (id === hoverB) return; if (hoverB != null) map.setFeatureState({ source: 'bld', id: hoverB }, { hover: false }); hoverB = id; if (id != null) map.setFeatureState({ source: 'bld', id }, { hover: true }); };
+  let hoverH = null;
+  const hoverHouse = id => { if (id === hoverH) return; const set = (i, v) => ['houses', 'm3d'].forEach(src => map.getSource(src) && map.setFeatureState({ source: src, id: i }, { hover: v })); if (hoverH != null) set(hoverH, false); hoverH = id; if (id != null) set(id, true); };
   M.hover = function (ll, pt) {
-    if (!M.bldHiddenNow()) { // normal map: tint the house under the mouse
-      if (!pt || map.getZoom() < 17 || !map.getLayer('bld-3d')) { hoverSet(null); return; }
-      const f = map.queryRenderedFeatures([pt.x, pt.y], { layers: ['bld-3d'] }); hoverSet(f.length ? f[0].properties.id : null); return;
-    }
-    hoverSet(null); const id = M.buildingAt(ll); if (id === hovId) return; hovId = id;
-    map.getSource('hov').setData(id ? { type: 'FeatureCollection', features: [{ type: 'Feature', properties: {}, geometry: { type: 'Polygon', coordinates: [M.buildingRing(id)] } }] } : EMPTY);
-    map.getCanvas().style.cursor = id ? 'pointer' : '';
+    if (!pt || !map.getLayer('house')) { hoverHouse(null); return; }
+    const hs = map.queryRenderedFeatures([pt.x, pt.y], { layers: ['house', 'house-num', 'm3d'] }).filter(f => f.layer.id !== 'm3d' || f.properties.kind === 'house'); hoverHouse(hs.length ? hs[0].properties.id || hs[0].properties.mid : null);
   };
   M.setBase = function (kind) {
     map.setLayoutProperty('sat', 'visibility', kind === 'sat' ? 'visible' : 'none');
     const vis = kind === 'sat' ? 'none' : 'visible';
-    map.getStyle().layers.forEach(l => { if (l.id === 'sat' || /^(mask|gov-line|bld|hov|pipes|cables|nodes|sel|draw|imp|wl|wdev|bh)/.test(l.id)) return; if (l.type === 'background') return; if (l.type === 'symbol' && kind === 'sat') map.setLayoutProperty(l.id, 'visibility', 'visible'); else if (l.type !== 'symbol') map.setLayoutProperty(l.id, 'visibility', vis); });
-    map.easeTo({ pitch: kind === '3d' ? 58 : 0, duration: 600 });
-    M.base = kind; M.applyBldHidden();
+    map.getStyle().layers.forEach(l => { if (l.id === 'sat' || /^(mask|gov-line|bld|hov|pipes|cables|nodes|sel|draw|imp|wl|wdev|bh|house|plates|peers|m3d)/.test(l.id)) return; if (l.type === 'background') return; if (l.type === 'symbol' && kind === 'sat') map.setLayoutProperty(l.id, 'visibility', 'visible'); else if (l.type !== 'symbol') map.setLayoutProperty(l.id, 'visibility', vis); });
+    if (kind === 'map') { map.jumpTo({ pitch: 0 }); map.setMaxPitch(0); } else { map.setMaxPitch(75); map.easeTo({ pitch: kind === '3d' ? 58 : 0, duration: 600 }); }
+    M.base = kind; M.applyBldHidden(); M.flatIcons(); M.render3d(); M.renderPlates(); M.scheduleBuildings();
   };
 
   // ---------------- buildings (static z14 tiles built by tools/build_tiles.py) ----------------
@@ -171,7 +181,7 @@
     const bb = map.getBounds(), W = bb.getWest() - 0.002, E = bb.getEast() + 0.002, S0 = bb.getSouth() - 0.002, N0 = bb.getNorth() + 0.002;
     const push = (id, h, ring) => {
       const o = over[id] || {}; if (o.deleted) return;
-      const fl = o.floors || 0, eh = fl ? fl * 3.2 : (h > 0 ? h : 6.4);
+      const fl = o.floors || 0, eh = FT.houses.floorsOf(o) * 3.2;
       feats.push({ type: 'Feature', id: feats.length, properties: { id, eh, h, fl, num: o.num || 0, lab: FT.num ? FT.num.label(o) : '', st: o.st || 0 }, geometry: { type: 'Polygon', coordinates: [ring] } });
     };
     for (let x = x0; x <= x1; x++) for (let y = y0; y <= y1; y++) {
@@ -184,6 +194,60 @@
     }
     Object.keys(over).forEach(id => { const o = over[id]; if (o.fp && !o.deleted && o.fp[0][0] > W && o.fp[0][0] < E && o.fp[0][1] > S0 && o.fp[0][1] < N0) push(id, 0, o.fp.concat([o.fp[0]])); }); // manually drawn buildings
     M.bldFeats = feats; map.getSource('bld').setData({ type: 'FeatureCollection', features: feats });
+    M.rebuildHouses();
+  };
+  // one marker per building (near its street side) + the houses added by hand; only when zoomed in enough to see them
+  M.rebuildHouses = function () {
+    if (!map.getSource('houses')) return; const H = FT.houses, over = FT.state.bld || {}, list = []; M._housesWaiting = false;
+    if (map.getZoom() >= H.MINZ - 0.2) {
+      const bb = map.getBounds(), W = bb.getWest() - 0.002, E = bb.getEast() + 0.002, S0 = bb.getSouth() - 0.002, N0 = bb.getNorth() + 0.002, inView = p => p[0] > W && p[0] < E && p[1] > S0 && p[1] < N0;
+      const add = (id, p) => { const o = over[id] || {}; list.push({ type: 'Feature', properties: { id, fl: H.floorsOf(o), lab: FT.num && o.num ? FT.num.label(o) : '', y: p[1] }, geometry: { type: 'Point', coordinates: p } }); };
+      (M.bldFeats || []).forEach(f => { const id = f.properties.id, ring = f.geometry.coordinates[0], o = over[id] || {}; if (o.pt || !inView(ring[0])) return; const p = H.autoPoint(id, ring.slice(0, -1)); if (!H.cached(id)) M._housesWaiting = true; add(id, p); });
+      for (const id in over) { const o = over[id]; if (!o.deleted && o.pt && inView(o.pt)) add(id, o.pt); }
+    }
+    M.houseFeats = list; map.getSource('houses').setData({ type: 'FeatureCollection', features: list }); M.render3d(); M.renderPlates();
+    if (M._selIds && M._selIds.size) M._selIds.forEach(id => map.setFeatureState({ source: 'houses', id }, { sel: true }));
+  };
+  // number plates. Flat maps: at the house point. 3D: the plate must hang under the raised model, so its ground point is
+  // pushed away from the camera until, on screen, it covers the height of the model's base (exact for the current view).
+  M.renderPlates = function () {
+    if (!map.getSource('plates')) return; const on3d = M.base === '3d', byId = on3d ? new Map((M.bldFeats || []).map(f => [f.properties.id, f])) : null;
+    let cam = null, camH = 0; if (on3d) { const tr = map.transform; if (tr.getCameraLngLat) { cam = tr.getCameraLngLat(); camH = tr.getCameraAltitude(); } }
+    const feats = (M.houseFeats || []).filter(f => f.properties.lab).map(f => {
+      let p = f.geometry.coordinates;
+      if (on3d && cam) { const b = byId.get(f.properties.id), h = !M.hideBld && b ? b.properties.eh : 0; if (h > 0 && camH > h + 5) { const k = camH / (camH - h); p = [cam.lng + (p[0] - cam.lng) * k, cam.lat + (p[1] - cam.lat) * k]; } }
+      return { type: 'Feature', properties: { id: f.properties.id, lab: f.properties.lab, y: f.properties.y }, geometry: { type: 'Point', coordinates: p } };
+    });
+    map.getSource('plates').setData({ type: 'FeatureCollection', features: feats });
+    map.setLayoutProperty('house-num', 'text-offset', on3d ? [0, 0.15] : [0, -1.45]);
+  };
+  // the 3D basemap shows real models instead of the flat icons (the number plates stay)
+  M.render3d = function () {
+    if (!map.getSource('m3d')) return; const on = M.base === '3d' && map.getZoom() >= FT.houses.MINZ - 0.2, out = [];
+    if (on) {
+      const H = FT.houses, byId = new Map((M.bldFeats || []).map(f => [f.properties.id, f]));
+      if (!M.hideHouses) (M.houseFeats || []).forEach(f => { H.houseParts(out, f.properties.id, f.geometry.coordinates, f.properties.fl, H.baseOf(f.properties.id, byId)); }); // raised on top of the drawing while it is shown
+      if (!M.netHidden) { const bb = map.getBounds(), W = bb.getWest() - 0.002, E = bb.getEast() + 0.002, S0 = bb.getSouth() - 0.002, N0 = bb.getNorth() + 0.002, hid = (FT.T && FT.T.hidden) || new Set(), hu = (FT.sync && FT.sync.active && FT.sync.hiddenUsers) || new Set();
+        Object.values(FT.state.nodes).forEach(n => { const p = n.ll; if (p[0] < W || p[0] > E || p[1] < S0 || p[1] > N0 || hid.has(n.id) || (hu.size && hu.has(n.by || '-'))) return; const hp = n.bld && M.housePoint(n.bld), mine = hp && !M.hideHouses && FT.dist(hp, p) < 2.5; H.nodeParts(out, n, mine ? H.beside(p) : p, mine ? H.baseOf(n.bld, byId) : 0); }); }
+    }
+    if (!on && !M._had3d) return; M._had3d = on;
+    map.getSource('m3d').setData({ type: 'FeatureCollection', features: out });
+    if (FT.T && FT.T.sel && on) map.setFeatureState({ source: 'm3d', id: FT.T.sel.id }, { sel: true });
+  };
+  M.flatIcons = function () { const o = M.base === '3d' ? 0 : 1; ['house', 'nodes'].forEach(i => map.getLayer(i) && map.setPaintProperty(i, 'icon-opacity', o)); if (map.getLayer('house-sel')) map.setLayoutProperty('house-sel', 'visibility', M.base === '3d' || M.hideHouses ? 'none' : 'visible'); };
+  const ringIndex = new Map(); let indexed = new Set();
+  M.ringAny = id => { // the drawing of a building, loaded tiles included (open ring)
+    const o = (FT.state.bld || {})[id]; if (o && o.fp) return o.fp; const f = M.buildingRing(id); if (f) return f.slice(0, -1);
+    for (const k in tileCache) { if (indexed.has(k)) continue; indexed.add(k); for (const t of tileCache[k]) ringIndex.set(t[0], t[2]); }
+    const flat = ringIndex.get(id); if (!flat) return null; const r = []; for (let i = 0; i < flat.length; i += 2) r.push([flat[i] / 1e6, flat[i + 1] / 1e6]); return r;
+  };
+  // THE point of a house = the point of its icon. Numbering, design, exports, reports and checks all use this and nothing else.
+  M.housePoint = id => { const o = (FT.state.bld || {})[id]; if (o && o.pt) return o.pt; const f = (M.houseFeats || []).find(f => f.properties.id === id); if (f) return f.geometry.coordinates; const r = M.ringAny(id); return r ? FT.houses.autoPoint(id, r) : ((o && o.ll) || null); };
+  // every house the project knows something about, as icon points (for exports and checks)
+  M.housesData = function () {
+    const S = FT.state, out = [];
+    for (const id in S.bld) { const o = S.bld[id]; if (o.deleted || !(o.num || o.fdb || o.house || o.floors || o.name || o.pt)) continue; const ll = M.housePoint(id) || o.ll; if (!ll) continue; out.push({ id, ll, num: o.num ? FT.num.label(o) : '', floors: FT.houses.floorsOf(o), name: o.name || '', fdb: (S.nodes[o.fdb] || {}).code || (S.nodes[o.fdb] || {}).name || '', o }); }
+    return out;
   };
   M.buildingAt = function (ll) { // footprint under a lon/lat (from loaded tiles)
     const f = (M.bldFeats || []).find(f => FT.pointInRing(ll, f.geometry.coordinates[0])); return f ? f.properties.id : null;
@@ -199,24 +263,25 @@
   };
   // buildings (id, centroid, ring, props) whose centroid lies in a ring — works for any area, from cache + manual buildings
   M.buildingsInRing = function (ring) {
-    const bb = FT.bboxOf(ring), out = [], over = FT.state.bld || {};
+    const bb = FT.bboxOf(ring), out = [], over = FT.state.bld || {}, seen = new Set(), take = (id, c, r, h, o) => { if (!seen.has(id) && FT.pointInRing(c, ring)) { seen.add(id); out.push({ id, c, ring: r, h, o, house: c }); } };
     const x0 = tx(bb[0]), x1 = tx(bb[2]), y0 = ty(bb[3]), y1 = ty(bb[1]);
     for (let x = x0; x <= x1; x++) for (let y = y0; y <= y1; y++) {
       const t = tileCache[x + '/' + y]; if (!t) continue;
       for (const [id, h, flat] of t) {
         if ((over[id] || {}).deleted || (over[id] || {}).fp) continue;
-        const r = []; for (let i = 0; i < flat.length; i += 2) r.push([flat[i] / 1e6, flat[i + 1] / 1e6]); const c = FT.centroid(r);
-        if (FT.pointInRing(c, ring)) out.push({ id, c, ring: r, h, o: over[id] || {} });
+        const o = over[id] || {}; if (!o.pt && (flat[0] / 1e6 < bb[0] - 0.002 || flat[0] / 1e6 > bb[2] + 0.002 || flat[1] / 1e6 < bb[1] - 0.002 || flat[1] / 1e6 > bb[3] + 0.002)) continue;
+        const r = []; for (let i = 0; i < flat.length; i += 2) r.push([flat[i] / 1e6, flat[i + 1] / 1e6]);
+        take(id, o.pt || FT.houses.autoPoint(id, r), r, h, o);
       }
     }
-    Object.keys(over).forEach(id => { const o = over[id]; if (o.fp && !o.deleted) { const c = FT.centroid(o.fp); if (FT.pointInRing(c, ring)) out.push({ id, c, ring: o.fp, h: 0, o }); } });
+    Object.keys(over).forEach(id => { const o = over[id]; if (o.deleted) return; if (o.fp) take(id, o.pt || FT.houses.autoPoint(id, o.fp), o.fp, 0, o); else if (o.pt) take(id, o.pt, M.ringAny(id) || FT.houses.square(o.pt), 0, o); }); // drawn, hand-added and moved houses
     return out;
   };
   // selection is a feature-state: no GeoJSON reload when you click a building (that reload froze big projects)
   M.setBuildingSelection = set => {
     const prev = M._selIds || new Set(); set = new Set(set); if (!M.ready) { M._selIds = set; return; }
-    prev.forEach(id => { if (!set.has(id)) map.setFeatureState({ source: 'bld', id }, { sel: false }); });
-    set.forEach(id => { if (!prev.has(id)) map.setFeatureState({ source: 'bld', id }, { sel: true }); });
+    if (map.getSource('m3d')) { prev.forEach(id => { if (!set.has(id)) map.setFeatureState({ source: 'm3d', id }, { sel: false }); }); set.forEach(id => map.setFeatureState({ source: 'm3d', id }, { sel: true })); }
+    if (map.getSource('houses')) { prev.forEach(id => { if (!set.has(id)) map.setFeatureState({ source: 'houses', id }, { sel: false }); }); set.forEach(id => map.setFeatureState({ source: 'houses', id }, { sel: true })); }
     M._selIds = set; M.selB = set;
   };
 
@@ -243,14 +308,15 @@
     if (showCables) { M._cablesDirty = false; map.getSource('cables').setData({ type: 'FeatureCollection', features: Object.values(S.cables).filter(c => shown(c) && ((c.pts && lineIn(c.pts, bb)) || [c.a, c.b].some(i => S.nodes[i] && inBB(S.nodes[i].ll, bb)))).map(c => { const pts = [].concat(...FT.cableSpans(c).map((s, i) => i ? s.pts.slice(1) : s.pts)); const g = (FT.CABLE_CAT.find(x => x.id === c.cat) || {}).group || 'Feeder'; return { type: 'Feature', id: c.id, properties: { id: c.id, z: zC[c.id] || 0, color: c.color || CABLE_COL[g] }, geometry: { type: 'LineString', coordinates: pts.length > 1 ? pts : (c.pts || []) } }; }) }); } else M._cablesDirty = true;
     if (FT.wl) FT.wl.render();
     if (FT.imp) FT.imp.render();
-    if (needBld && M.rebuildBuildingData && M.bldFeats) M.rebuildBuildingData();
+    if (needBld && M.rebuildBuildingData && M.bldFeats) M.rebuildBuildingData(); else M.render3d();
   };
   M.netLayers = () => map.getStyle().layers.filter(l => l.source === 'nodes' || l.source === 'pipes' || l.source === 'cables').map(l => l.id);
   M.setNetHidden = function (v) {
     M.netHidden = !!v; M.netLayers().forEach(id => map.setLayoutProperty(id, 'visibility', v ? 'none' : 'visible'));
-    if (!v) M.renderNetNow(['lod']);
+    if (!v) M.renderNetNow(['lod']); else M.render3d();
   };
   M.setSelection = function (kind, id) {
+    if (map.getSource('m3d')) { if (M._sel3 && M._sel3 !== id) map.setFeatureState({ source: 'm3d', id: M._sel3 }, { sel: false }); M._sel3 = kind === 'node' ? id : null; if (M._sel3) map.setFeatureState({ source: 'm3d', id }, { sel: true }); }
     const S = FT.state; let f = [];
     if (kind === 'wdev' && S.wdev && S.wdev[id]) f = [{ type: 'Feature', properties: {}, geometry: { type: 'Point', coordinates: S.wdev[id].ll } }];
     if (kind === 'wlink' && S.wlinks && S.wlinks[id]) { const l = S.wlinks[id], a = S.wdev[l.a], b = S.wdev[l.b]; if (a && b) f = [{ type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: [a.ll, b.ll] } }]; }

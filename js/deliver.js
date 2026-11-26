@@ -51,8 +51,10 @@
       k += '<Folder><name>' + title + ' (' + arr.length + ')</name>' + arr.map(c => '<Placemark><name>' + esc(c.name) + '</name><styleUrl>#cab_' + g + '</styleUrl>' + data({ cores: c.core, fibre: c.std, length_m: FT.cableLength(c).toFixed(1) }) + '<LineString><tessellate>1</tessellate><coordinates>' + ln(cablePts(c)) + '</coordinates></LineString></Placemark>').join('') + '</Folder>'; });
     [['u', 'Pipes · underground', p => p.ptype !== 'aerial'], ['a', 'Pipes · aerial (walls)', p => p.ptype === 'aerial']].forEach(([id, title, fn]) => { const arr = Object.values(S.pipes).filter(fn); if (!arr.length) return;
       k += '<Folder><name>' + title + ' (' + arr.length + ')</name>' + arr.map(p => '<Placemark><name>' + esc(p.name) + '</name><styleUrl>#pipe_' + id + '</styleUrl>' + data({ cat: p.cat, length_m: FT.pathLen(p.pts).toFixed(1), depth_cm: p.depth, width_cm: p.width }) + '<LineString><tessellate>1</tessellate><coordinates>' + ln(p.pts) + '</coordinates></LineString></Placemark>').join('') + '</Folder>'; });
+    const hs = FT.map.housesData();
+    if (hs.length) k += '<Folder><name>Houses (' + hs.length + ')</name>' + hs.map(h => '<Placemark><name>' + esc(h.num || h.name || 'house') + '</name>' + data({ number: h.num, floors: h.floors, fdb: h.fdb, name: h.name }) + '<Point><coordinates>' + h.ll[0] + ',' + h.ll[1] + ',0</coordinates></Point></Placemark>').join('') + '</Folder>';
     const bl = Object.entries(S.bld).filter(([, o]) => o.fp && !o.deleted);
-    if (bl.length) k += '<Folder><name>Buildings (' + bl.length + ')</name>' + bl.map(([id, o]) => '<Placemark><name>' + esc(FT.num.label(o) || o.name || id) + '</name>' + data({ floors: o.floors, fdb: (S.nodes[o.fdb] || {}).code }) + '<Polygon><outerBoundaryIs><LinearRing><coordinates>' + ln(o.fp.concat([o.fp[0]])) + '</coordinates></LinearRing></outerBoundaryIs></Polygon></Placemark>').join('') + '</Folder>';
+    if (bl.length) k += '<Folder><name>Building drawings (' + bl.length + ')</name>' + bl.map(([id, o]) => '<Placemark><name>' + esc(id) + '</name><Polygon><outerBoundaryIs><LinearRing><coordinates>' + ln(o.fp.concat([o.fp[0]])) + '</coordinates></LinearRing></outerBoundaryIs></Polygon></Placemark>').join('') + '</Folder>';
     return k + '</Document></kml>';
   };
   DV.kmz = function () { FT.exp.download('ftth_' + pname() + '_' + stamp() + '.kmz', FT.exp.zipOne('doc.kml', utf8(DV.kml()))); };
@@ -69,8 +71,8 @@
     [['pipe_underground', p => p.ptype !== 'aerial', '#2aa8ff'], ['pipe_aerial_wall', p => p.ptype === 'aerial', '#ffc233']].forEach(([n, fn, col]) => { const arr = Object.values(S.pipes).filter(fn); if (arr.length) L.push({ name: n, type: 'LINESTRING', cols: pipeCols, rows: arr.map(p => ({ g: { t: 'LineString', c: p.pts }, v: [p.name, p.cat, +FT.pathLen(p.pts).toFixed(2), p.depth == null ? 30 : p.depth, p.width == null ? 6 : p.width, p.cover == null ? 24 : p.cover, p.color || col] })) }); });
     const bl = Object.entries(S.bld).filter(([, o]) => o.fp && !o.deleted && o.fp.length > 2);
     if (bl.length) L.push({ name: 'buildings', type: 'POLYGON', cols: [['number', 'TEXT'], ['floors', 'INTEGER'], ['name', 'TEXT'], ['fdb', 'TEXT']], rows: bl.map(([id, o]) => ({ g: { t: 'Polygon', c: [o.fp.concat([o.fp[0]])] }, v: [FT.num.label(o), o.floors || 0, o.name || '', (S.nodes[o.fdb] || {}).code || ''] })) });
-    const hn = Object.entries(S.bld).filter(([, o]) => o.num && o.ll && !o.deleted);
-    if (hn.length) L.push({ name: 'house_numbers', type: 'POINT', cols: [['number', 'TEXT'], ['floors', 'INTEGER'], ['fdb', 'TEXT']], rows: hn.map(([id, o]) => ({ g: { t: 'Point', c: o.ll }, v: [FT.num.label(o), o.floors || 0, (S.nodes[o.fdb] || {}).code || ''] })) });
+    const hn = FT.map.housesData();
+    if (hn.length) L.push({ name: 'house_numbers', type: 'POINT', cols: [['number', 'TEXT'], ['floors', 'INTEGER'], ['fdb', 'TEXT'], ['name', 'TEXT']], rows: hn.map(h => ({ g: { t: 'Point', c: h.ll }, v: [h.num, h.floors, h.fdb, h.name] })) });
     return L;
   };
   function wkb(g) {

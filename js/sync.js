@@ -235,7 +235,7 @@
       if (s.k === 'node' && S.nodes[s.i]) add('Point', S.nodes[s.i].ll);
       else if (s.k === 'pipe' && S.pipes[s.i]) add('LineString', S.pipes[s.i].pts);
       else if (s.k === 'cable' && S.cables[s.i] && S.cables[s.i].pts) add('LineString', S.cables[s.i].pts);
-      else if (s.k === 'bld' && FT.map.buildingRing) { const r = FT.map.buildingRing(s.i); if (r) add('LineString', r.concat([r[0]])); }
+      else if (s.k === 'bld' && FT.map.housePoint) { const q = FT.map.housePoint(s.i); if (q) add('Point', q); }
     });
     return out;
   }

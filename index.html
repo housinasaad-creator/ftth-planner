@@ -1,7 +1,8 @@
 <!doctype html>
 <html lang="ar" dir="ltr"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="color-scheme" content="only dark"><meta name="darkreader-lock">
+<meta name="color-scheme" content="only dark"><meta name="supported-color-schemes" content="only dark"><meta name="theme-color" content="#07090d"><meta name="darkreader-lock">
+<script>/* the chosen look is set before anything is painted; the browser or system mode never decides it */(function(){var t="dark";try{if(localStorage.getItem("ft2_theme")==="light")t="light"}catch(e){}document.documentElement.setAttribute("data-theme",t);if(t==="light"){document.querySelector("meta[name=color-scheme]").content="only light";document.querySelector("meta[name=supported-color-schemes]").content="only light";document.querySelector("meta[name=theme-color]").content="#ffffff"}})();</script>
 <title>FTTH Planner · Homs</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23ff6a3d'/%3E%3Ctext x='16' y='23' font-family='Arial' font-size='20' font-weight='bold' text-anchor='middle' fill='white'%3EF%3C/text%3E%3C/svg%3E">
 <link rel="stylesheet" href="vendor/maplibre-gl.css">
@@ -10,11 +11,13 @@
 <div id="app">
   <header id="top">
     <button id="brand" class="logo" title=""><span class="logo-mark">F</span></button>
+    <div id="themeSw"><button data-th="dark">🌙 <span></span></button><button data-th="light">☀ <span></span></button></div>
     <button id="projName" class="projname"><b id="projTitle"></b><i>▾</i></button>
     <nav id="modeTabs"></nav>
-    <div id="searchBox"><input id="search" autocomplete="off"><div id="searchRes"></div></div>
+    <img id="mjhLogo" src="img/mjh-logo.png" alt="MJH" width="217" height="128">
     <div class="grow"></div>
     <button id="bUndo" class="ib">↶</button><button id="bRedo" class="ib">↷</button>
+    <button id="bLearn" class="pill">🎓 <span></span></button>
     <button id="bHelp" class="ib">?</button>
     <button id="bLang" class="pill"></button>
     <button id="bPrices" class="pill"></button><button id="bShare" class="pill"></button>
@@ -47,7 +50,7 @@
 <script>(function(){var ua=navigator.userAgent||'';var phone=/Android|iPhone|iPad|iPod|Mobile|Windows Phone/i.test(ua)||(('ontouchstart' in window)&&Math.min(screen.width,screen.height)<700)||window.innerWidth<820&&('ontouchstart' in window);if(phone){document.body.classList.add('phone');document.getElementById('phoneBlock').classList.add('on');window.__PHONE=true;}})();</script>
 <script src="vendor/maplibre-gl.js"></script><script src="vendor/polygon-clipping.umd.min.js"></script>
 <script src="js/i18n.js"></script><script src="js/model.js"></script><script src="js/dxf.js"></script>
-<script src="js/map.js"></script><script src="js/roads.js"></script><script src="js/tools.js"></script><script src="js/numbering.js"></script><script src="js/wireless.js"></script><script src="js/trench.js"></script><script src="js/design.js"></script><script src="js/import.js"></script>
-<script src="js/export.js"></script><script src="js/bedit.js"></script><script src="js/diagram.js"></script><script src="js/spec.js"></script><script src="js/deliver.js"></script><script src="js/config.js"></script><script src="js/store.js"></script><script src="js/sync.js"></script><script src="js/report.js"></script><script src="js/ui.js"></script>
+<script src="js/houses.js"></script><script src="js/map.js"></script><script src="js/roads.js"></script><script src="js/tools.js"></script><script src="js/numbering.js"></script><script src="js/wireless.js"></script><script src="js/trench.js"></script><script src="js/design.js"></script><script src="js/import.js"></script>
+<script src="js/export.js"></script><script src="js/bedit.js"></script><script src="js/diagram.js"></script><script src="js/spec.js"></script><script src="js/deliver.js"></script><script src="js/config.js"></script><script src="js/store.js"></script><script src="js/sync.js"></script><script src="js/report.js"></script><script src="js/ui.js"></script><script src="js/keys.js"></script>
 <script>FT.boot();</script>
 </body></html>

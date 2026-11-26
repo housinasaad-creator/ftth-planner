@@ -7,7 +7,7 @@
   const t = k => FT.t(k), T = () => FT.T;
   const esc = s => String(s == null ? '' : s).replace(/[<>&"]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c]));
   let mode = 'infra', rtab = 'tool', chipFilter = 'all', treeQuery = '', collapsed = new Set(), names = false;
-  const O = UI.opt = { ratio: { sk: '', dk: '', bk: '' }, pipeCat: 'h40', cableCat: 'bb144', medium: 'free', floors: 4 };
+  const O = UI.opt = { ratio: { sk: '', dk: '', bk: '' }, pipeCat: 'h40', cableCat: 'bb144', medium: 'free', floors: 2 };
 
   // ---------------- icons (own drawings) ----------------
   const SV = p => '<svg viewBox="0 0 24 24">' + p + '</svg>';
@@ -18,34 +18,42 @@
     route: SV('<circle cx="5" cy="18" r="2.5"/><circle cx="19" cy="6" r="2.5"/><path d="M7 17c6-1 2-9 10-10"/>'), reconnect: SV('<path d="M9 15l-3 3a3 3 0 004 4l3-3M15 9l3-3a3 3 0 00-4-4l-3 3M9 15l6-6"/>'),
     design: SV('<path d="M4 20L16 8M14 4l1 3 3 1-3 1-1 3-1-3-3-1 3-1zM19 14l.6 1.6L21 16l-1.4.6L19 18l-.6-1.4L17 16l1.4-.4z"/>'), sub: SV('<circle cx="9" cy="8" r="3.5"/><path d="M3 20c0-4 3-6 6-6s6 2 6 6M17 5v6M14 8h6"/>'), plan: SV('<path d="M4 18l4-12 8 4 4 8z"/><circle cx="12" cy="13" r="2"/>'),
     report: SV('<path d="M6 3h9l4 4v14H6z"/><path d="M9 12h7M9 16h7M9 8h3"/>'), kmz: SV('<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/>'), import: SV('<path d="M12 3v12M7 11l5 5 5-5M4 20h16"/>'),
-    dxf: SV('<path d="M4 20V4h16"/><path d="M4 20L20 4M8 20h.01M20 8h.01"/>'), number: SV('<path d="M9 4L7 20M17 4l-2 16M4 9h17M3 15h17"/>'), bdraw: SV('<path d="M4 20V10l8-6 8 6v10z"/><path d="M10 20v-6h4v6"/>'), floors: SV('<path d="M12 3l9 5-9 5-9-5zM3 12l9 5 9-5M3 16l9 5 9-5"/>'),
+    dxf: SV('<path d="M4 20V4h16"/><path d="M4 20L20 4M8 20h.01M20 8h.01"/>'), number: SV('<path d="M9 4L7 20M17 4l-2 16M4 9h17M3 15h17"/>'), bdraw: SV('<path d="M4 20V10l8-6 8 6v10z"/><path d="M10 20v-6h4v6"/>'), house: SV('<path d="M3 11l9-7 9 7"/><path d="M5.5 10v10h13V10"/><path d="M12 12.5v5M9.5 15h5"/>'), floors: SV('<path d="M12 3l9 5-9 5-9-5zM3 12l9 5 9-5M3 16l9 5 9-5"/>'),
     wdev: SV('<path d="M12 12v9M8 21h8"/><circle cx="12" cy="10" r="2"/><path d="M7 6a7 7 0 000 8M17 6a7 7 0 010 8M4.5 4a11 11 0 000 12M19.5 4a11 11 0 010 12"/>'), wlink: SV('<circle cx="5" cy="12" r="2.5"/><circle cx="19" cy="12" r="2.5"/><path d="M8 12h8" stroke-dasharray="2 2"/>'),
     soc: SV('<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M8.5 12l2.5 2.5 4.5-5"/>'),
   };
   const nodeImg = k => '<img src="' + FT.map.iconDataURL(k, 40) + '">';
   function toolDefs() {
     const D = (id, ic, key) => ({ id, ic, key, l: t('t_' + id), d: t('t_' + id + '_d') });
-    const infra = [
-      { g: 'g_select', items: [D('select', IC.select, 'V'), D('area', IC.area, 'L'), D('measure', IC.measure, 'U')] },
-      { g: 'g_point', items: [D('mh', IC.mh, 'M'), D('hh', nodeImg('hh'), 'J'), D('pole', IC.pole, 'D'), D('sk', nodeImg('sk'), '1'), D('dk', nodeImg('dk'), '2'), D('bk', nodeImg('bk'), '3'), D('olt', nodeImg('olt'), 'O'), D('splice', IC.splice, 'E')] },
-      { g: 'g_line', items: [D('pipe', IC.pipe, 'B'), D('cable', IC.cable, 'K'), D('route', IC.route, 'G')] },
-      { g: 'g_edit', items: [D('reconnect', IC.reconnect, 'R')] },
-      { g: 'g_build', items: [D('number', IC.number, 'N'), D('bdraw', IC.bdraw, ''), D('floors', IC.floors, '')] },
-      { g: 'g_analysis', items: [D('design', IC.design, ''), D('sub', IC.sub, ''), D('plan', IC.plan, '')] },
-      { g: 'g_output', items: [{ id: 'report', ic: IC.report, l: t('t_report'), d: t('t_report_d'), act: () => UI.openReport() }, { id: 'kmz', ic: IC.kmz, l: t('t_kmz'), d: t('t_kmz_d'), act: () => FT.exp.kmz() }, { id: 'import', ic: IC.import, l: t('t_import'), d: t('t_import_d'), act: () => UI.openIO() }, { id: 'dxf', ic: IC.dxf, l: t('t_dxf'), d: t('t_dxf_d'), act: () => { FT.exp.area = { mode: null, ring: null }; FT.exp.openDxf(); } }, { id: 'soc', ic: IC.soc, l: t('t_soc'), d: t('t_soc_d'), act: () => FT.spec.open() }] },
-    ];
-    if (mode === 'wireless') return [infra[0], { g: 'g_point', items: [D('wdev', IC.wdev, 'W'), D('wlink', IC.wlink, 'Q')] }, infra[6]];
-    if (mode === 'pon') return [infra[0], infra[5], infra[6]];
-    return infra;
+    // top to bottom by how much they are used
+    const basics = { g: 'g_select', items: [D('select', IC.select, 'V'), D('area', IC.area, 'L'), D('measure', IC.measure, 'U')] };
+    const houses = { g: 'g_build', items: [D('house', IC.house, 'A'), D('number', IC.number, 'N'), D('floors', IC.floors, 'T'), D('bdraw', IC.bdraw, 'W')] };
+    const design = { g: 'g_analysis', items: [D('design', IC.design, 'Y'), D('sub', IC.sub, 'S'), D('plan', IC.plan, 'C')] };
+    const points = { g: 'g_point', items: [D('olt', nodeImg('olt'), 'O'), D('sk', nodeImg('sk'), '1'), D('dk', nodeImg('dk'), '2'), D('bk', nodeImg('bk'), '3'), D('mh', IC.mh, 'M'), D('hh', nodeImg('hh'), 'J'), D('pole', IC.pole, 'D'), D('splice', IC.splice, 'E')] };
+    const lines = { g: 'g_line', items: [D('pipe', IC.pipe, 'B'), D('cable', IC.cable, 'K'), D('route', IC.route, 'G'), D('reconnect', IC.reconnect, 'R')] };
+    const files = { g: 'g_output', items: [{ id: 'report', ic: IC.report, l: t('t_report'), d: t('t_report_d'), act: () => UI.openReport() }, { id: 'soc', ic: IC.soc, l: t('t_soc'), d: t('t_soc_d'), act: () => FT.spec.open() }, { id: 'kmz', ic: IC.kmz, l: t('t_kmz'), d: t('t_kmz_d'), act: () => FT.exp.kmz() }, { id: 'dxf', ic: IC.dxf, l: t('t_dxf'), d: t('t_dxf_d'), act: () => { FT.exp.area = { mode: null, ring: null }; FT.exp.openDxf(); } }, { id: 'import', ic: IC.import, l: t('t_import'), d: t('t_import_d'), act: () => UI.openIO() }] };
+    if (mode === 'wireless') return [basics, { g: 'g_point', items: [D('wdev', IC.wdev, 'W'), D('wlink', IC.wlink, 'Q')] }, files];
+    if (mode === 'pon') return [basics, design, files];
+    return [basics, houses, design, points, lines, files];
   }
   UI.buildToolbar = function () {
-    const tb = $('#toolbar'); tb.innerHTML = '';
+    const tb = $('#toolbar'); tb.innerHTML = ''; tb.dir = FT.lang === 'ar' ? 'rtl' : 'ltr';
     toolDefs().forEach(g => {
       const el = document.createElement('div'); el.className = 'grp'; el.innerHTML = '<div class="row"></div><div class="gl">' + esc(t(g.g)) + '</div>';
-      g.items.forEach(it => { const b = document.createElement('button'); b.className = 'tb'; b.dataset.id = it.id; b.title = it.l + (it.key ? ' · ' + it.key : '') + ' — ' + it.d; b.innerHTML = it.ic + '<span>' + esc(it.l) + '</span>' + (it.key ? '<kbd>' + it.key + '</kbd>' : ''); b.onclick = () => it.act ? it.act() : T().setTool(it.id); el.firstChild.appendChild(b); });
+      g.items.forEach(it => { const b = document.createElement('button'); b.className = 'tb'; b.dataset.id = it.id; b.dataset.tip = it.l; b.dataset.desc = it.d || ''; b.dataset.key = it.key || FT.keys.OUT[it.id] || ''; b.innerHTML = it.ic + '<span>' + esc(it.l) + '</span>' + (it.key ? '<kbd>' + it.key + '</kbd>' : ''); b.onclick = () => it.act ? it.act() : T().setTool(it.id); el.firstChild.appendChild(b); });
       tb.appendChild(el);
     });
-    UI.toolChanged();
+    UI.toolChanged(); UI.fitToolbar();
+    if (!UI._tbWatch && G.ResizeObserver) { UI._tbWatch = new ResizeObserver(() => { if (tb.clientHeight !== UI._tbH) UI.fitToolbar(); }); UI._tbWatch.observe(tb); }
+  };
+  // every tool stays visible without scrolling: the buttons shrink to the screen's height, and on very short screens a third column opens
+  UI.fitToolbar = function () {
+    const tb = $('#toolbar'); if (!tb || !tb.firstChild) return; UI._tbH = tb.clientHeight; if (!tb.clientHeight) return;
+    const over = () => tb.scrollHeight > tb.clientHeight + 1;
+    for (const cols of [2, 3, 4]) {
+      tb.style.setProperty('--tbc', cols);
+      for (let h = 36; h >= 24; h--) { tb.style.setProperty('--tbh', h + 'px'); if (!over()) return; }
+    }
   };
   UI.toolChanged = function () {
     $$('#toolbar .tb').forEach(b => b.classList.toggle('on', b.dataset.id === T().tool));
@@ -61,6 +69,21 @@
   // ---------------- small pieces ----------------
   let toastTimer = 0; UI.toast = m => { const e = $('#toast'); e.textContent = m; e.style.display = 'block'; clearTimeout(toastTimer); toastTimer = setTimeout(() => e.style.display = 'none', 2600); };
   UI.hint = m => { const e = $('#hint'); e.textContent = m || ''; e.style.display = m ? 'block' : 'none'; };
+  // the planner's own dark / light switch (independent of the browser and the computer)
+  UI.theme = () => document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
+  UI.setTheme = function (name) {
+    const th = name === 'light' ? 'light' : 'dark'; document.documentElement.setAttribute('data-theme', th); try { localStorage.setItem('ft2_theme', th); } catch (e) { }
+    const set = (n, v) => { const m = document.querySelector('meta[name=' + n + ']'); if (m) m.content = v; };
+    set('color-scheme', 'only ' + th); set('supported-color-schemes', 'only ' + th); set('theme-color', th === 'light' ? '#ffffff' : '#07090d'); UI.themeButtons();
+  };
+  UI.openLearn = function () { // tutorial videos will live here
+    const ar = FT.lang === 'ar';
+    UI.modal(ar ? 'تعليمي' : 'Tutorials', '<div id="learnBox"><p class="d">' + (ar ? 'الفيديوهات التعليمية للأداة بتنضاف هون قريباً.' : 'Tutorial videos for the planner will be added here soon.') + '</p></div>', [{ label: t('close') }]);
+  };
+  UI.themeButtons = function () {
+    const ar = FT.lang === 'ar', learn = $('#bLearn'); if (learn) { learn.querySelector('span').textContent = ar ? 'تعليمي' : 'Tutorials'; learn.onclick = () => UI.openLearn(); }
+    $$('#themeSw button').forEach(b => { const v = b.dataset.th; b.classList.toggle('on', v === UI.theme()); b.querySelector('span').textContent = v === 'dark' ? (ar ? 'غامق' : 'Dark') : (ar ? 'فاتح' : 'Light'); b.dataset.tip = v === 'dark' ? (ar ? 'الوضع الغامق' : 'Dark mode') : (ar ? 'الوضع الفاتح' : 'Light mode'); b.dataset.desc = ar ? 'يغيّر شكل الأداة فقط، ولا يتأثر بوضع المتصفح أو الجهاز.' : 'Changes this planner only; the browser or computer mode never affects it.'; b.dataset.key = 'Shift+V'; b.onclick = () => UI.setTheme(v); });
+  };
   UI.coord = s => { $('#stCoord').textContent = s; }; UI.zoom = z => { $('#stZoom').textContent = 'z' + z.toFixed(1); };
   UI.saved = ok => { const m = $('#stMsg'); m.style.color = ok === false ? 'var(--warn)' : 'var(--ok)'; m.textContent = ok === false ? (FT.lang === 'ar' ? 'غير متصل — محفوظ على هذا الجهاز' : 'offline — saved on this device') : (FT.lang === 'ar' ? 'تم الحفظ في السحابة' : 'saved to cloud'); setTimeout(() => { m.textContent = ''; }, 2500); };
   UI.meter = function (pt, seg, total) { const m = $('#meter'); if (!pt) { m.style.display = 'none'; return; } m.style.display = 'block'; m.style.left = (pt.x + 16) + 'px'; m.style.top = (pt.y + 14) + 'px'; m.innerHTML = '+ <b>' + FT.fmtLen(seg) + '</b> · ' + t('live_total') + ' <b>' + FT.fmtLen(total) + '</b>'; };
@@ -96,7 +119,7 @@
   UI.closeCtx = () => { $('#ctx').style.display = 'none'; };
   UI.ctxMenu = function (x, y, h, p, extra) {
     const c = $('#ctx'), items = [];
-    if (h && h.kind === 'bld') { items.push([t('menu_props'), () => { UI.tab('props'); }], [t('menu_zoom'), UI.zoomSel]); if (T().bsel.size > 1) items.push([t('merge_b'), () => FT.bedit.merge([...T().bsel])]); items.push([t('menu_delete'), () => T().deleteSelection()]); }
+    if (h && h.kind === 'bld') { items.push([t('menu_props'), () => { UI.tab('props'); }], [t('menu_zoom'), UI.zoomSel], ['📍 ' + t('house_move'), () => T().pickHouseMove(h.id)]); if (T().bsel.size > 1) items.push([t('merge_b'), () => FT.bedit.merge([...T().bsel])]); items.push([t('menu_delete'), () => T().deleteSelection()]); }
     else if (h) { items.push([t('menu_props'), () => { UI.tab('props'); }], [t('menu_zoom'), UI.zoomSel], [t('menu_hide'), UI.hideSel]); if (h.kind === 'node') items.push([t('menu_splice'), () => UI.openSplice(h.id, true)]); items.push([t('menu_delete'), () => T().deleteSelection()]); }
     (extra || []).forEach(x => items.unshift(x));
     items.push([t('menu_copy'), () => navigator.clipboard && navigator.clipboard.writeText(p[1].toFixed(6) + ', ' + p[0].toFixed(6))]);
@@ -111,11 +134,12 @@
   // clicking a row in the tree: if the element is off screen or too small to see at this height, fly to it and zoom so that it shows
   UI.revealSel = function () {
     const s = T().sel, S = FT.state, m = FT.map.map; if (!s || !m) return; const z = m.getZoom(), b = m.getBounds(); let pts = [];
-    if (s.kind === 'node' && S.nodes[s.id]) pts = [S.nodes[s.id].ll]; else if (s.kind === 'pipe' && S.pipes[s.id]) pts = S.pipes[s.id].pts; else if (s.kind === 'cable' && S.cables[s.id]) pts = [].concat(...FT.cableSpans(S.cables[s.id]).map(x => x.pts)); else if (s.kind === 'bld') { const r = FT.map.buildingRing(s.id) || (S.bld[s.id] && S.bld[s.id].fp); if (r) pts = [FT.centroid(r)]; }
+    if (s.kind === 'node' && S.nodes[s.id]) pts = [S.nodes[s.id].ll]; else if (s.kind === 'pipe' && S.pipes[s.id]) pts = S.pipes[s.id].pts; else if (s.kind === 'cable' && S.cables[s.id]) pts = [].concat(...FT.cableSpans(S.cables[s.id]).map(x => x.pts)); else if (s.kind === 'bld') { const q = UI.housePos(s.id); if (q) pts = [q]; }
     if (!pts.length) return; const inView = pts.some(p => p[0] >= b.getWest() && p[0] <= b.getEast() && p[1] >= b.getSouth() && p[1] <= b.getNorth());
     if (!inView || z < FT.map.CABLE_MINZ) UI.zoomSel();
   };
-  UI.zoomSel = function () { const s = T().sel, S = FT.state; if (!s) return; if (s.kind === 'node' && S.nodes[s.id]) FT.map.flyTo(S.nodes[s.id].ll, 18.5); else if (s.kind === 'pipe' && S.pipes[s.id]) FT.map.fitBBox(FT.bboxOf(S.pipes[s.id].pts), FT.map.CABLE_MINZ + 0.1); else if (s.kind === 'cable' && S.cables[s.id]) FT.map.fitBBox(FT.bboxOf([].concat(...FT.cableSpans(S.cables[s.id]).map(x => x.pts))), FT.map.CABLE_MINZ + 0.1); else if (s.kind === 'bld') { const r = FT.map.buildingRing(s.id) || (S.bld[s.id] && S.bld[s.id].fp); if (r) FT.map.flyTo(FT.centroid(r), 19); } };
+  UI.zoomSel = function () { const s = T().sel, S = FT.state; if (!s) return; if (s.kind === 'node' && S.nodes[s.id]) FT.map.flyTo(S.nodes[s.id].ll, 18.5); else if (s.kind === 'pipe' && S.pipes[s.id]) FT.map.fitBBox(FT.bboxOf(S.pipes[s.id].pts), FT.map.CABLE_MINZ + 0.1); else if (s.kind === 'cable' && S.cables[s.id]) FT.map.fitBBox(FT.bboxOf([].concat(...FT.cableSpans(S.cables[s.id]).map(x => x.pts))), FT.map.CABLE_MINZ + 0.1); else if (s.kind === 'bld') { const q = UI.housePos(s.id); if (q) FT.map.flyTo(q, 19); } };
+  UI.housePos = id => { const o = FT.state.bld[id] || {}; return o.pt || FT.map.housePoint(id) || o.ll || (o.fp ? FT.centroid(o.fp) : null); }; // where the house icon stands
   UI.hideSel = function () { const s = T().sel; if (!s) return; T().hidden.add(s.id); UI.applyHidden(); UI.refreshTree(); };
   UI.applyHidden = function () { FT.map.renderNet('lod'); }; // hidden items are skipped when the map data is built
   const folderIds = fid => Object.keys(FT.state.fmap || {}).filter(k => FT.state.fmap[k] === fid).map(k => k.slice(2));
@@ -268,7 +292,8 @@
     if (tool === 'pipe') h += field(t('pipe_type'), sel('pipeCat', FT.PIPE_CAT.map(p => [p.id, p.name]), O.pipeCat));
     if (tool === 'cable') { const groups = {}; FT.CABLE_CAT.forEach(c => (groups[c.group] = groups[c.group] || []).push(c)); h += field(t('cable_cat'), '<select id="cableCat">' + Object.entries(groups).map(([g, a]) => '<optgroup label="' + g + '">' + a.map(c => '<option value="' + c.id + '"' + (c.id === O.cableCat ? ' selected' : '') + '>' + esc(c.name) + '</option>').join('') + '</optgroup>').join('') + '</select>') + field(t('medium'), '<div class="seg" id="mediumSeg"><button data-m="free" class="' + (O.medium === 'free' ? 'on' : '') + '">' + t('m_free') + '</button><button data-m="aerial" class="' + (O.medium === 'aerial' ? 'on' : '') + '">' + t('m_aerial') + '</button></div>'); }
     if (tool === 'number') { const n = T().num; h += '<div class="seg" id="numMode" style="margin-bottom:10px"><button data-m="auto" class="' + (n.mode === 'auto' ? 'on' : '') + '">' + t('num_auto') + '</button><button data-m="click" class="' + (n.mode === 'click' ? 'on' : '') + '">' + t('num_click') + '</button></div><div class="two">' + field(t('num_prefix'), '<input id="numPfx" value="' + esc(n.prefix) + '">') + field(t('num_next'), '<input id="numNext" type="text" inputmode="numeric" value="' + n.next + '">') + '</div>' + (n.mode === 'auto' ? field(t('num_order'), sel('numOrder', [['walk', t('o_walk')], ['rows', t('o_rows')], ['street', t('o_street')]], n.order)) + '<p class="d">' + t('num_hint_auto') + '</p><button class="btn" id="numClear">' + t('num_clear') + '</button>' : '<p class="d">' + t('num_hint_click') + '</p>'); }
-    if (tool === 'floors' || tool === 'bdraw') h += field(t('floors'), '<input id="flN" type="text" inputmode="numeric" value="' + O.floors + '">') + '<p class="d">' + t('floors_hint') + '</p>';
+    if (tool === 'house') h += '<p class="d">' + t('house_hint') + '</p>';
+    if (tool === 'floors' || tool === 'bdraw' || tool === 'house') h += field(t('floors'), '<input id="flN" type="text" inputmode="numeric" value="' + O.floors + '">') + '<p class="d">' + t('floors_hint') + '</p>';
     if (tool !== 'select') h += keysBox([[t('place_here'), t('k_click')], [t('k_enter'), 'Enter'], [t('k_back'), '⌫'], [t('k_esc'), 'Esc']]);
     body.innerHTML = h;
     body.querySelectorAll('#ratioSeg button').forEach(b => b.onclick = () => { O.ratio[tool] = b.dataset.r; FT.state.ui.ratio[tool] = b.dataset.r; UI.renderPanel(); });
@@ -332,12 +357,14 @@
       $('#bMerge').onclick = () => FT.bedit.merge([...bs]); $('#bDelAll').onclick = () => T().deleteSelection(); $('#pRel').onclick = () => T().select(null); return;
     }
     const cap = FT.diagram.caption(id).map(x => '<div class="kv"><span>' + esc(x) + '</span></div>').join('');
-    body.innerHTML = head(t('b_title') + (o.num ? ' · ' + esc(FT.num.label(o)) : ''), '<div class="kv"><span>' + t('b_area') + '</span><b>' + (ring ? Math.round(FT.ringArea(ring)) + ' m²' : '?') + '</b></div><div class="kv"><span>' + t('b_height') + '</span><b>' + (pr.eh ? pr.eh.toFixed(1) + ' m' : '?') + '</b></div><div style="height:8px"></div>') +
+    body.innerHTML = head(t('b_title') + (o.num ? ' · ' + esc(FT.num.label(o)) : ''), '<div class="kv"><span>' + t('b_height') + '</span><b>' + (FT.houses.floorsOf(o) * 3.2).toFixed(1) + ' m</b></div><div style="height:8px"></div>') +
       '<div id="bDiag">' + FT.diagram.bld(id) + '</div><div style="margin:6px 0 10px">' + cap + '</div>' +
-      '<div class="two">' + field(t('b_num'), '<input id="bNum" value="' + (o.num || '') + '">') + field(t('num_prefix'), '<input id="bPfx" value="' + esc(o.pfx || '') + '">') + '</div>' + field(t('b_floors'), '<input id="bFl" value="' + (o.floors || '') + '" placeholder="auto">') + field(t('b_name'), '<input id="bNm" value="' + esc(o.name || '') + '">') +
-      '<div style="display:flex;gap:8px;margin-bottom:8px"><button class="btn pri" id="bSave">' + t('p_save') + '</button><button class="btn" id="bClr">' + t('b_clear') + '</button><button class="btn bad" id="bDel">' + t('b_delete') + '</button></div><p class="d">' + t('b_handles') + '</p>';
+      '<div class="two">' + field(t('b_num'), '<input id="bNum" value="' + (o.num || '') + '">') + field(t('num_prefix'), '<input id="bPfx" value="' + esc(o.pfx || '') + '">') + '</div>' + field(t('b_floors'), '<input id="bFl" value="' + (o.floors || '') + '" placeholder="' + FT.houses.DEFAULT_FLOORS + '">') + field(t('b_name'), '<input id="bNm" value="' + esc(o.name || '') + '">') +
+      '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px"><button class="btn pri" id="bSave">' + t('p_save') + '</button><button class="btn" id="bClr">' + t('b_clear') + '</button><button class="btn" id="bMove">📍 ' + t('house_move') + '</button>' + (ring && !o.house && !FT.map.hideBld ? '<button class="btn" id="bDraw">✏️ ' + (FT.bedit.editing === id ? (FT.lang === 'ar' ? 'إنهاء تعديل الرسم' : 'Done editing drawing') : (FT.lang === 'ar' ? 'تعديل رسم المبنى' : 'Edit building drawing')) + '</button>' : '') + '<button class="btn bad" id="bDel">' + t('b_delete') + '</button></div>' + (FT.bedit.editing === id ? '<p class="d">' + t('b_handles') + '</p>' : '');
     const num = v => parseInt(String(v).replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d)), 10) || 0;
-    $('#bSave').onclick = () => { FT.commit(); const b = S.bld[id] = S.bld[id] || {}; const n = num($('#bNum').value), fl = num($('#bFl').value); n ? b.num = n : delete b.num; b.pfx = $('#bPfx').value; fl ? b.floors = fl : delete b.floors; b.name = $('#bNm').value; if (!b.ll && ring) b.ll = FT.centroid(ring); FT.changed('bld'); UI.toast(t('toast_saved')); };
+    $('#bSave').onclick = () => { FT.commit(); const b = FT.houses.pin(id); const n = num($('#bNum').value), fl = num($('#bFl').value); n ? b.num = n : delete b.num; b.pfx = $('#bPfx').value; fl ? b.floors = fl : delete b.floors; b.name = $('#bNm').value; if (!b.ll) { const q = UI.housePos(id); if (q) b.ll = q.slice(); } FT.changed('bld'); UI.toast(t('toast_saved')); };
+    $('#bMove').onclick = () => FT.T.pickHouseMove(id);
+    if ($('#bDraw')) $('#bDraw').onclick = () => { FT.bedit.editing = FT.bedit.editing === id ? null : id; FT.bedit.refresh(); panelProps(body); };
     $('#bClr').onclick = () => { FT.num.clear(id); panelProps(body); }; $('#pRel').onclick = () => T().select(null); $('#bDel').onclick = () => T().deleteSelection();
   }
   function panelAnalysis(body) {
@@ -403,9 +430,9 @@
       root.querySelector('#ioReset').onclick = async () => { if (await UI.confirmBox(t('io_confirm'), true)) { FT.commit(); FT.setState(Object.assign(FT.blank(), { meta: FT.state.meta })); UI.closeModal(); } };
     });
   };
-  UI.openHelp = function () {
-    const rows = [['V', 'sc_select'], ['M / J / D / 1 / 2 / 3 / O / E', 't_point'], ['B / K / G / R', 'g_line'], ['L / U', 't_area'], ['N', 't_number'], ['Esc', 'sc_esc'], ['Enter', 'sc_enter'], ['Del', 'sc_del'], ['Ctrl+Z / Ctrl+Y', 'sc_undo'], ['F', 'sc_f'], ['H', 'sc_h'], ['Ctrl+B', 'sc_layers'], ['Ctrl+I', 'sc_panel'], ['Shift + click', 'sc_multi'], ['🖱 ' + (FT.lang === 'ar' ? 'عجلة الماوس مضغوطة + تحريك' : 'Middle button + drag'), 'sc_rotate']];
-    UI.modal(t('help_title'), '<table class="t">' + rows.map(([k, l]) => '<tr><td><kbd class="k">' + esc(k) + '</kbd></td><td>' + esc(t(l)) + '</td></tr>').join('') + '</table>', [{ label: t('close') }]);
+  UI.openHelp = function () { // every shortcut, grouped
+    const body = '<div class="sc">' + FT.keys.helpRows().map(([title, rows]) => '<section><h4>' + esc(title) + '</h4><table class="t">' + rows.map(([k, l]) => '<tr><td><kbd class="k">' + esc(k) + '</kbd></td><td>' + esc(l) + '</td></tr>').join('') + '</table></section>').join('') + '</div><p class="d">' + (FT.lang === 'ar' ? 'الاختصارات تعمل بلوحة المفاتيح العربية والإنكليزية. مرّر الماوس فوق أي زر ليظهر اختصاره.' : 'Shortcuts work with an Arabic or English layout. Hover any button to see its shortcut.') + '</p>';
+    UI.modal(t('help_title'), body, [{ label: t('close') }]);
   };
   UI.openProjects = async function (first) {
     const list = await FT.store.list(), types = [['gpon', 'GPON', 'ألياف (سلكي)'], ['wireless', 'Wireless', 'لاسلكي'], ['mixed', 'Mixed', 'مختلط']];
@@ -478,23 +505,21 @@
     el.querySelectorAll('button').forEach(b => b.onclick = () => { mode = b.dataset.mode; T().setTool('select'); UI.buildTabs(type); UI.buildToolbar(); if (mode === 'pon') UI.tab('analysis'); });
   };
 
-  // ---------------- search / commands ----------------
+  // ---------------- commands ----------------
   function wireSearch() {
-    const inp = $('#search'), res = $('#searchRes'); let tm = 0;
-    inp.oninput = () => { clearTimeout(tm); const q = inp.value.trim(); if (q.length < 3) { res.style.display = 'none'; return; } tm = setTimeout(async () => { try { const b = FT.BOUND.bbox, r = await (await fetch('https://nominatim.openstreetmap.org/search?format=json&limit=6&accept-language=' + FT.lang + '&viewbox=' + b[0] + ',' + b[3] + ',' + b[2] + ',' + b[1] + '&bounded=1&q=' + encodeURIComponent(q))).json(); res.innerHTML = r.map(x => '<div data-ll="' + x.lon + ',' + x.lat + '">' + esc(x.display_name) + '</div>').join('') || '<div>—</div>'; res.style.display = 'block'; res.querySelectorAll('[data-ll]').forEach(d => d.onclick = () => { const [lo, la] = d.dataset.ll.split(',').map(Number); FT.map.flyTo([lo, la], 17); res.style.display = 'none'; }); } catch (e) { res.style.display = 'none'; } }, 500); };
-    document.addEventListener('click', e => { if (!$('#searchBox').contains(e.target)) res.style.display = 'none'; });
     const cmd = $('#cmd'); cmd.onkeydown = e => { if (e.key !== 'Enter') return; const v = cmd.value.trim(), a = v.split(/\s+/); cmd.value = ''; cmd.blur(); if (a[0] === 'goto' && a.length >= 3) FT.map.flyTo([+a[2], +a[1]], 17); else if (a[0] === 'help') UI.openHelp(); else if (a[0] === 'dxf') FT.exp.openDxf(); else if (a[0] === 'kmz') FT.exp.kmz(); else UI.toast('help · goto <lat> <lon> · dxf · kmz'); };
   }
 
   // ---------------- static wiring / boot ----------------
   UI.applyLang = function () {
-    document.documentElement.lang = FT.lang; $('#brand').title = t('projects'); $('#search').placeholder = t('search'); $('#layersTitle').textContent = t('layers'); $('#lsearch').placeholder = t('layers_search');
+    UI.themeButtons(); document.documentElement.lang = FT.lang; $('#brand').title = t('projects'); $('#layersTitle').textContent = t('layers'); $('#lsearch').placeholder = t('layers_search');
     $('#bUndo').title = t('undo'); $('#bRedo').title = t('redo'); $('#bHelp').title = t('help'); $('#bLang').textContent = FT.lang === 'ar' ? 'EN' : 'عربي'; $('#bShare').textContent = t('share'); $('#bPrices').textContent = '$ ' + t('prices_btn'); $('#bUser').textContent = FT.sb && FT.sb.user ? FT.sb.user.email.split('@')[0] : t('signin');
     $('#bNewFolder').title = t('new_folder'); $('#bCollapse').title = t('collapse'); $('#bLockAll').title = t('lock_all');
     $$('.tabs button[data-tab]').forEach(b => b.textContent = t('tab_' + (b.dataset.tab === 'tool' ? 'tool' : b.dataset.tab === 'props' ? 'props' : 'analysis')));
-    $('#basemap .cap').textContent = t('basemap'); $('#basemap .bm').innerHTML = [['map', 'b_map'], ['3d', 'b_3d'], ['sat', 'b_sat']].map(([k, l]) => '<button data-b="' + k + '" class="' + ((FT.map.base || 'map') === k ? 'on' : '') + '">' + t(l) + '</button>').join(''); $('#basemap .bm').innerHTML += '<button id="bHideNet" class="' + (FT.map.netHidden ? 'on' : '') + '" title="' + t('b_hidenet') + '">👁 ' + t('b_hidenet') + '</button>'; if (FT.map.base === 'sat') { $('#basemap .bm').innerHTML += '<button id="bHideBld" class="' + (FT.map.hideBld ? 'on' : '') + '" title="' + t('b_hide') + '">👁 ' + t('b_hide') + '</button>'; $('#bHideBld').onclick = () => { FT.map.setBldHidden(!FT.map.hideBld); UI.applyLang(); }; }
+    $('#basemap .cap').textContent = t('basemap'); $('#basemap .bm').innerHTML = [['map', 'b_map'], ['3d', 'b_3d'], ['sat', 'b_sat']].map(([k, l]) => '<button data-b="' + k + '" class="' + ((FT.map.base || 'map') === k ? 'on' : '') + '">' + t(l) + '</button>').join(''); $('#basemap .bm').innerHTML += '<button id="bHideNet" class="' + (FT.map.netHidden ? 'on' : '') + '" title="' + t('b_hidenet') + '">👁 ' + t('b_hidenet') + '</button><button id="bHideHouses" class="' + (FT.map.hideHouses ? 'on' : '') + '" title="' + t('b_hidehouses') + '">👁 ' + t('b_hidehouses') + '</button>'; { $('#basemap .bm').innerHTML += '<button id="bHideBld" class="' + (FT.map.hideBld ? 'on' : '') + '" title="' + t('b_hide') + '">👁 ' + t('b_hide') + '</button>'; $('#bHideBld').onclick = () => { FT.map.setBldHidden(!FT.map.hideBld); UI.applyLang(); }; }
     $$('#basemap [data-b]').forEach(b => b.onclick = () => { FT.map.setBase(b.dataset.b); UI.applyLang(); });
     $('#bHideNet').onclick = () => { FT.map.setNetHidden(!FT.map.netHidden); UI.applyLang(); };
+    $('#bHideHouses').onclick = () => { FT.map.setHousesHidden(!FT.map.hideHouses); UI.applyLang(); };
     UI.drawChips();
     $('#cmd').placeholder = '> help · goto lat lon'; $('#bCross').title = t('st_cross'); $('#bNames').title = t('st_names'); $('#bLay').title = t('st_layers'); $('#bPan').title = t('st_panel');
     if (FT.map.ready) { UI.buildToolbar(); UI.refreshTree(); UI.renderPanel(); }

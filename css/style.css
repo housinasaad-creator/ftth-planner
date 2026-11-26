@@ -9,23 +9,25 @@
 button,input,select,textarea{font:inherit;color:inherit}button{cursor:pointer;background:none;border:0}
 input,select,textarea{background:var(--p3);border:1px solid var(--line);border-radius:8px;padding:7px 9px;width:100%;unicode-bidi:plaintext;outline:0}
 input:focus,select:focus,textarea:focus{border-color:var(--hot)}
-#app{display:grid;grid-template-rows:46px 66px 1fr 30px;height:100%}
+#app{display:grid;grid-template-rows:46px minmax(0,1fr) 30px;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"top top" "work bar" "status status";height:100%}
+#app>#top{grid-area:top}#app>#toolbar{grid-area:bar}#app>#work{grid-area:work}#app>#status{grid-area:status}
 .grow{flex:1}
-#top{display:flex;align-items:center;gap:8px;padding:0 10px;background:var(--p1);border-bottom:1px solid var(--line)}
+#top{position:relative;display:flex;align-items:center;gap:8px;padding:0 10px;background:var(--p1);border-bottom:1px solid var(--line)}
 .logo{width:30px;height:30px;border-radius:8px;background:var(--hot);display:grid;place-items:center;color:#07090d;font-weight:800}
 .projname{display:flex;gap:6px;align-items:center;padding:6px 10px;border-radius:8px;font-weight:700}.projname:hover{background:var(--p3)}.projname i{font-style:normal;color:var(--mu)}
 #modeTabs{display:flex;gap:4px;background:var(--p2);padding:3px;border-radius:10px;margin:0 6px}
 #modeTabs button{padding:6px 14px;border-radius:8px;color:var(--mu);font-weight:600}#modeTabs button.on{background:var(--p3);color:var(--tx);box-shadow:inset 0 0 0 1px var(--hot)}
-#searchBox{position:relative;width:min(330px,28vw)}#searchRes{position:absolute;top:36px;left:0;right:0;background:var(--p2);border:1px solid var(--line);border-radius:10px;z-index:30;display:none;max-height:300px;overflow:auto}
-#searchRes div{padding:8px 10px;cursor:pointer;border-bottom:1px solid var(--line)}#searchRes div:hover{background:var(--p3)}
 .ib{width:32px;height:32px;border-radius:8px;display:grid;place-items:center;color:var(--mu);font-size:16px}.ib:hover{background:var(--p3);color:var(--tx)}.ib.sm{width:26px;height:26px;font-size:13px}.ib.on{color:var(--hot);background:var(--p3)}.ib:disabled{opacity:.35;cursor:default}
 .pill{padding:6px 12px;border-radius:20px;background:var(--p3);border:1px solid var(--line);font-weight:600}.pill:hover{border-color:var(--hot)}
-/* toolbar */
-#toolbar{display:flex;align-items:stretch;gap:0;padding:4px 8px 2px;background:var(--p1);border-bottom:1px solid var(--line);overflow-x:auto;overflow-y:hidden}
-.grp{display:flex;flex-direction:column;padding:0 8px;border-right:1px solid var(--line);flex:none}.grp:last-child{border:0}
-.grp .row{display:flex;gap:2px;flex:1;align-items:center}.grp .gl{font-size:9.5px;letter-spacing:1.2px;color:#5d667d;text-align:center;margin-top:1px;direction:ltr}
-.tb{position:relative;display:flex;align-items:center;gap:6px;padding:5px 9px;border-radius:9px;color:#c4c9d8;font-weight:600;white-space:nowrap}.tb:hover{background:var(--p3)}.tb.on{background:rgba(255,106,61,.16);box-shadow:inset 0 0 0 1.5px var(--hot);color:#fff}
-.tb svg,.tb img{width:19px;height:19px;flex:none}.tb svg{fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}.tb kbd{position:absolute;top:0;right:3px;font:700 8.5px 'Plex';color:#6b7490;direction:ltr}
+/* toolbar: a compact strip on the right edge */
+#mjhLogo{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);height:31px;width:auto;pointer-events:none;user-select:none}
+@media(max-width:1240px){#mjhLogo{display:none}}
+#toolbar{--tbc:2;--tbh:34px;width:calc(var(--tbc) * 42px + 12px);min-height:0;display:flex;flex-direction:column;justify-content:space-between;padding:2px 5px;background:var(--p1);border-left:1px solid var(--line);overflow:hidden}
+.grp{display:flex;flex-direction:column;border-bottom:1px solid var(--line);padding-bottom:2px;flex:none}.grp:last-child{border:0}
+.grp .gl{order:-1;font-size:10.5px;font-weight:700;color:var(--hot2);text-align:center;line-height:15px;white-space:nowrap;unicode-bidi:plaintext}
+.grp .row{display:grid;grid-template-columns:repeat(var(--tbc),1fr);gap:2px}
+.tb{position:relative;display:flex;align-items:center;justify-content:center;height:var(--tbh);padding:0;border-radius:9px;color:#c4c9d8;border:0}.tb:hover{background:var(--p3)}.tb.on{background:rgba(255,106,61,.16);box-shadow:inset 0 0 0 1.5px var(--hot);color:#fff}
+.tb span{display:none}.tb svg,.tb img{width:19px;height:19px;flex:none}.tb svg{fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}.tb kbd{position:absolute;top:0;left:3px;font:700 8.5px 'Plex';color:#6b7490;direction:ltr}
 /* work area */
 #work{display:flex;min-height:0;position:relative}
 #left{width:268px;flex:none;background:var(--p1);border-right:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
@@ -78,10 +80,10 @@ body.phone #app,body.phone #modal,body.phone #toast,body.phone #ctx{display:none
 body.ro #toolbar .tb:not([data-id=select]):not([data-id=area]):not([data-id=measure]):not([data-id=report]):not([data-id=kmz]):not([data-id=dxf]){opacity:.35;pointer-events:none}body.ro #rbody input,body.ro #rbody select,body.ro #rbody textarea,body.ro #rbody .btn.bad{pointer-events:none;opacity:.6}
 
 /* first screen: only the map and the project chooser */
-body.nop #toolbar,body.nop #status{height:0;padding:0;border:0;overflow:hidden;visibility:hidden}
-body.nop #app{grid-template-rows:46px 0 1fr 0}
+body.nop #toolbar{width:0;padding:0;border:0;overflow:hidden;visibility:hidden}body.nop #status{height:0;padding:0;border:0;overflow:hidden;visibility:hidden}
+body.nop #app{grid-template-rows:46px minmax(0,1fr) 0}
 body.nop #left,body.nop #right{display:none}
-body.nop #top>*:not(#brand):not(.grow):not(#bLang){display:none}
+body.nop #top>*:not(#brand):not(.grow):not(#bLang):not(#mjhLogo){display:none}
 body.nop #modal{background:#07090d88}
 .ptypes{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:6px 0 16px}
 .ptype{display:flex;flex-direction:column;gap:6px;text-align:start;padding:16px;border-radius:14px;background:var(--p2);border:1px solid var(--line)}
@@ -119,3 +121,35 @@ table.soc td{vertical-align:top;font-size:12.5px}table.soc .d{font-size:11.5px}
 .tr.usr .udot{width:10px;height:10px;border-radius:50%;flex:0 0 auto;display:inline-block}.tr.usr small{color:#9aa1b6;margin-inline-start:4px}.tr.usr .uon{color:#22c55e;font-size:10px}
 .tr.usr .ugo{background:none;border:0;color:#ff8a62;cursor:pointer;font-size:15px;padding:0 4px}
 #bLocal{border-color:#ffb020;color:#ffb020;font-weight:700}
+
+/* tooltips with the shortcut */
+#tip{position:fixed;z-index:90;display:none;max-width:290px;background:#0e1117;color:#eceff6;border:1px solid #ff6a3d;border-radius:10px;padding:8px 11px;font-size:12.5px;line-height:1.5;box-shadow:0 10px 30px rgba(0,0,0,.5);pointer-events:none}
+#tip .tn{display:flex;gap:10px;align-items:center;justify-content:space-between}#tip kbd{background:#ff6a3d;color:#fff;border-radius:6px;padding:1px 9px;font:700 12.5px Consolas,monospace;direction:ltr;white-space:nowrap}#tip p{margin:5px 0 0;color:#9aa1b6}
+.sc{display:grid;grid-template-columns:1fr 1fr;gap:6px 18px;max-height:62vh;overflow:auto}.sc h4{margin:8px 0 4px;color:#ff8a62}.sc kbd{direction:ltr;white-space:nowrap}
+@media(max-width:900px){.sc{grid-template-columns:1fr}}
+
+/* ---- the planner's colours are its own: the browser, system or an add-on may not repaint it ---- */
+:root{color-scheme:only dark;forced-color-adjust:none}
+*,*::before,*::after{forced-color-adjust:none;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+html,body,#app,#map,.maplibregl-canvas{filter:none!important}
+#themeSw{display:flex;gap:2px;background:var(--p2);border:1px solid var(--line);border-radius:10px;padding:2px;flex:none}
+#themeSw button{padding:4px 9px;border-radius:8px;color:var(--mu);font-weight:600;font-size:12px;white-space:nowrap}#themeSw button.on{background:var(--p3);color:var(--tx);box-shadow:inset 0 0 0 1px var(--hot)}
+body.nop #top>#themeSw{display:flex}
+/* ---- light look (chosen inside the planner) ---- */
+:root[data-theme=light]{color-scheme:only light;--bg:#eef0f4;--p1:#ffffff;--p2:#f6f7fa;--p3:#eceef4;--line:#d5dae4;--tx:#141925;--mu:#566078;--hot2:#c4461c;--ok:#0b7d4f;--warn:#935c00;--bad:#c42347}
+:root[data-theme=light] .tb{color:#2a3145}:root[data-theme=light] .tb.on{color:#141925}:root[data-theme=light] .tb kbd{color:#79839a}
+:root[data-theme=light] .grp .gl{color:var(--hot2)}:root[data-theme=light] .cap{color:#7b859c}
+:root[data-theme=light] .tabs button.on,:root[data-theme=light] .tr .acts button:hover{color:var(--tx)}
+:root[data-theme=light] .meter,:root[data-theme=light] .hint{background:#fffffff2;color:#141925}:root[data-theme=light] .meter b{color:#935c00}
+:root[data-theme=light] #right{background:#fffffff4;box-shadow:0 12px 40px rgba(20,25,37,.18)}
+:root[data-theme=light] .dlg{box-shadow:0 20px 60px rgba(20,25,37,.28)}:root[data-theme=light] #modal,:root[data-theme=light] #modal2{background:rgba(20,25,37,.38)}:root[data-theme=light] body.nop #modal{background:rgba(238,240,244,.55)}
+:root[data-theme=light] .warnbox{background:#fff5dd;border-color:#efd08c;color:#6d4a00}
+:root[data-theme=light] .warnbox[style]{background:#e9f3ff!important;border-color:#a9cdf0!important;color:#12507f!important}
+:root[data-theme=light] .edgeBtn{background:#fffffff2;color:#141925}:root[data-theme=light] .edgeBtn:hover{background:#eceef4}
+:root[data-theme=light] #teamBox,:root[data-theme=light] #tip{background:#ffffff;color:#141925;box-shadow:0 12px 34px rgba(20,25,37,.22)}
+:root[data-theme=light] .tm button{background:#eceef4;color:#141925}:root[data-theme=light] .tm small,:root[data-theme=light] .tm.none,:root[data-theme=light] #tip p,:root[data-theme=light] .tr.usr small{color:#566078}
+:root[data-theme=light] #cross i{background:#00000066}
+:root[data-theme=light] #ctx{box-shadow:0 10px 30px rgba(20,25,37,.2)}
+:root[data-theme=light] #bLocal{color:#935c00}
+/* narrower screens: the top bar tightens so the logo in the middle keeps its place */
+@media(max-width:1400px){#top{gap:5px;padding:0 7px}#top .pill{padding:5px 8px;font-size:12px}#modeTabs{margin:0 2px}#modeTabs button{padding:6px 9px;font-size:12.5px}#themeSw button{padding:4px 6px}.projname{padding:6px 6px}#top .ib{width:28px}}

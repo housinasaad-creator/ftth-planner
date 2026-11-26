@@ -18,16 +18,16 @@
   FT.onChange(why => { if (why !== 'move' && FT.T.num) { const before = FT.T.num.next; if (N.syncNext() !== before && FT.UI && FT.UI.numChanged) FT.UI.numChanged(); } });
 
   N.clickBuilding = function (e, p) {
-    const h = FT.T.hit(e); const id = h && h.kind === 'bld' ? h.id : FT.map.buildingAt(p); if (!id) { U().toast('Click a building'); return; }
+    const h = FT.T.hit(e); const id = h && h.kind === 'bld' ? h.id : null; if (!id) { U().toast(FT.lang === 'ar' ? 'انقر على لوغو البيت' : 'Click a house icon'); return; }
     const o = FT.T.num;
     if (!e.originalEvent.shiftKey && (FT.state.bld[id] || {}).num) { FT.T.select('bld', id); U().tab('tool'); return; } // already numbered: it keeps its number
     FT.commit();
     if (e.originalEvent.shiftKey) { const had = (FT.state.bld[id] || {}).num; const re = FT.bedit.unnumber(id); if (had) U().toast((FT.lang === 'ar' ? 'أُزيل الرقم ' + had + ' · أُعيد ترقيم ' : 'Number ' + had + ' removed · renumbered ') + re); return; }
-    N.syncNext(); const b = ensure(id); b.num = o.next++; b.pfx = o.prefix || ''; const rg = FT.map.buildingRing(id) || b.fp; if (rg) b.ll = FT.centroid(rg); FT.changed('num'); U().numChanged(); FT.T.select('bld', id); U().tab('tool'); // stay on the numbering panel
+    N.syncNext(); const b = FT.houses.pin(id); b.num = o.next++; b.pfx = o.prefix || ''; const hp = FT.map.housePoint(id); if (hp) b.ll = hp.slice(); /* the number belongs to the house marker */ FT.changed('num'); U().numChanged(); FT.T.select('bld', id); U().tab('tool'); // stay on the numbering panel
   };
   N.clickFloors = function (e, p) {
-    const h = FT.T.hit(e); const id = h && h.kind === 'bld' ? h.id : FT.map.buildingAt(p); if (!id) return;
-    const fl = FT.T.opt && FT.T.opt.floors || U().floorsValue(); FT.commit(); ensure(id).floors = fl; FT.changed('floors'); FT.T.select('bld', id);
+    const h = FT.T.hit(e); const id = h && h.kind === 'bld' ? h.id : null; if (!id) return;
+    const fl = FT.T.opt && FT.T.opt.floors || U().floorsValue(); FT.commit(); FT.houses.pin(id).floors = fl; FT.changed('floors'); FT.T.select('bld', id);
   };
   N.addBuilding = function (ring) {
     FT.commit(); const id = 'u' + FT.uid('').slice(0, 7); const b = ensure(id); b.fp = ring; b.floors = U().floorsValue(); b.custom = 1;
@@ -56,7 +56,7 @@
           const dx = best.x - cur.x, dy = best.y - cur.y, d = Math.hypot(dx, dy) || 1; hx = dx / d; hy = dy / d; left.delete(best); order.push(best); cur = best;
         }
       }
-      FT.commit(); N.syncNext(); order.forEach(p => { const b = ensure(p.id); b.num = o.next++; b.pfx = o.prefix || ''; b.ll = p.c; });
+      FT.commit(); N.syncNext(); order.forEach(p => { const b = FT.houses.pin(p.id); b.num = o.next++; b.pfx = o.prefix || ''; b.ll = (b.pt || p.c).slice(); });
       FT.changed('num'); U().numChanged(); U().toast(FT.t('num_done') + ' ' + order.length + ' ' + FT.t('bld_n'));
     });
   };

@@ -8,15 +8,15 @@
 
   DG.info = function (id) {
     const S = FT.state, o = S.bld[id] || {}, f = (FT.map.bldFeats || []).find(x => x.properties.id === id), pr = f ? f.properties : {};
-    const ring = (FT.bedit && FT.bedit.ringOf(id)) || null, c = o.ll || (ring ? FT.centroid(ring) : null);
-    const floors = o.floors || pr.fl || (pr.eh ? Math.max(1, Math.round(pr.eh / 3.2)) : 2);
+    const ring = (FT.bedit && FT.bedit.ringOf(id)) || null, c = FT.map.housePoint(id) || o.ll || (ring ? FT.centroid(ring) : null);
+    const floors = FT.houses.floorsOf(o); // the floors drawn on the house icon
     const subs = Object.values(S.subs || {}).filter(s => s.bld === id);
     let fdb = (o.fdb && S.nodes[o.fdb]) || (subs[0] && S.nodes[subs[0].node]) || null, dist = null;
     if (!fdb && c) { let bd = 40; Object.values(S.nodes).forEach(n => { if (n.type !== 'bk') return; const d = FT.dist(n.ll, c); if (d < bd) { bd = d; fdb = n; } }); }
     let near = null; if (!fdb && c) { let bd = 120; Object.values(S.nodes).forEach(n => { const d = FT.dist(n.ll, c); if (d < bd) { bd = d; near = n; } }); dist = near ? bd : null; }
     const feed = fdb ? Object.values(S.cables).find(k => k.nodes.includes(fdb.id) && ((FT.CABLE_CAT.find(x => x.id === k.cat) || {}).group !== 'Drop') && k.nodes[k.nodes.length - 1] === fdb.id) || Object.values(S.cables).find(k => k.nodes.includes(fdb.id) && ((FT.CABLE_CAT.find(x => x.id === k.cat) || {}).group !== 'Drop')) : null;
     const ports = fdb ? (ratioN(fdb.ratio) || 4) : 0, used = Math.min(ports, subs.length);
-    return { id, o, floors, num: o.num ? FT.num.label(o) : '', subs, fdb, near, dist, feed, ports, used, area: ring ? Math.round(FT.ringArea(ring)) : null };
+    return { id, o, floors, num: o.num ? FT.num.label(o) : '', subs, fdb, near, dist, feed, ports, used, area: null };
   };
 
   const esc = s => String(s == null ? '' : s).replace(/[<>&"]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c]));

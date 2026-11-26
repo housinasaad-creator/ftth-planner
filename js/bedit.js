@@ -10,7 +10,7 @@
 
   // footprint of any building (own override, otherwise the map footprint), open ring [[lon,lat],…]
   B.ringOf = id => { const o = FT.state.bld[id]; if (o && o.fp) return open(o.fp); const r = FT.map.buildingRing(id); return r ? open(r) : null; };
-  function ensureFp(id) { const S = FT.state, o = S.bld[id] = S.bld[id] || {}; if (!o.fp) { const r = B.ringOf(id); if (r) o.fp = r; } o.edited = 1; return o; }
+  function ensureFp(id) { const o = FT.houses.pin(id); if (!o.fp) { const r = B.ringOf(id); if (r) o.fp = r; } o.edited = 1; return o; }
 
   // ---- geometry: local metric frame and minimum-area oriented rectangle ----
   function hull(P) {
@@ -43,10 +43,12 @@
     if (ring.length <= 40) ring.forEach((p, i) => F.push({ type: 'Feature', id: 'v' + i, properties: { id: 'v' + i, k: 'vtx', i }, geometry: { type: 'Point', coordinates: p } }));
     return F;
   };
+  B.editing = null; // id of the building whose DRAWING is being edited (a button in the house card): clicking a house edits the house, not the drawing
   B.refresh = function () {
     const T = FT.T, M = FT.map; if (!M || !M.ready) return;
-    const ok = T && T.sel && T.sel.kind === 'bld' && T.tool === 'select' && !(FT.store && FT.store.mode === 'view') && !(T.bsel && T.bsel.size > 1);
-    M.setBH(ok ? B.handles(T.sel.id) : []);
+    if (B.editing && !(T && T.sel && T.sel.kind === 'bld' && T.sel.id === B.editing)) B.editing = null;
+    const ok = T && T.sel && T.sel.kind === 'bld' && B.editing === T.sel.id && T.tool === 'select' && !(FT.store && FT.store.mode === 'view') && !(T.bsel && T.bsel.size > 1);
+    M.setBH(ok && !M.hideBld ? B.handles(T.sel.id) : []); // no footprint handles while the drawing is hidden
   };
 
   // ---- dragging a handle ----
@@ -90,7 +92,7 @@
   B.removeSelected = function () {
     const T = FT.T, ids = T.bsel && T.bsel.size ? [...T.bsel] : (T.sel && T.sel.kind === 'bld' ? [T.sel.id] : []); if (!ids.length) return;
     const r = B.remove(ids), ar = FT.lang === 'ar';
-    U().toast(ar ? 'حُذف ' + r.del + ' مبنى' + (r.re ? ' · أُعيد ترقيم ' + r.re + ' مبنى بعده' : '') + (r.subs ? ' · وحُذف ' + r.subs + ' مشترك' : '') : r.del + ' building(s) deleted' + (r.re ? ' · ' + r.re + ' renumbered' : '') + (r.subs ? ' · ' + r.subs + ' subscriber(s) removed' : ''));
+    U().toast(ar ? 'حُذف ' + r.del + ' بيت' + (r.re ? ' · أُعيد ترقيم ' + r.re + ' بيت بعده' : '') + (r.subs ? ' · وحُذف ' + r.subs + ' مشترك' : '') : r.del + ' house(s) deleted' + (r.re ? ' · ' + r.re + ' renumbered' : '') + (r.subs ? ' · ' + r.subs + ' subscriber(s) removed' : ''));
   };
   // remove only the number of one building and close the gap
   B.unnumber = function (id) {
@@ -99,7 +101,7 @@
 
   // ---- merge ----
   B.merge = function (ids) {
-    const S = FT.state; ids = ids.filter(id => B.ringOf(id)); if (ids.length < 2) { U().toast(FT.lang === 'ar' ? 'اختر مبنيين على الأقل (Shift + نقرة)' : 'Select at least two buildings (Shift+click)'); return false; }
+    const S = FT.state; ids = ids.filter(id => B.ringOf(id)); if (ids.length < 2) { U().toast(FT.lang === 'ar' ? 'اختر بيتين على الأقل (Shift + نقرة)' : 'Select at least two houses (Shift+click)'); return false; }
     const rings = ids.map(id => B.ringOf(id)); let ring = null, mode = 'union';
     try { const res = G.polygonClipping.union(...rings.map(r => [r.concat([r[0]])])); if (res.length === 1) ring = res[0][0].slice(0, -1); } catch (e) { ring = null; }
     if (!ring) { // pieces do not touch: convex hull of all of them
@@ -109,10 +111,10 @@
     const withNum = ids.filter(id => (S.bld[id] || {}).num).sort((a, b) => S.bld[a].num - S.bld[b].num), keep = withNum[0] || ids[0], others = ids.filter(id => id !== keep);
     const fl = Math.max(0, ...ids.map(id => (S.bld[id] || {}).floors || 0)), nm = (S.bld[keep] || {}).name;
     // the kept building has the smallest number, so removing the other numbers (and closing their gaps) never moves it
-    B.remove(others, true);
+    const o0 = FT.houses.pin(keep); void o0; B.remove(others, true);
     const o = S.bld[keep] = S.bld[keep] || {}; o.fp = ring; o.edited = 1; o.merged = 1; delete o.deleted; if (fl) o.floors = fl; if (nm) o.name = nm;
     FT.T.clearBuildingSel(); FT.changed('bld'); FT.UI.numChanged(); FT.T.select('bld', keep);
-    U().toast(FT.lang === 'ar' ? 'تم دمج ' + ids.length + ' مباني' + (mode === 'hull' ? ' (غير متلامسة: دمج محدّب)' : '') : ids.length + ' buildings merged' + (mode === 'hull' ? ' (not touching: convex hull)' : ''));
+    U().toast(FT.lang === 'ar' ? 'تم دمج ' + ids.length + ' بيوت' + (mode === 'hull' ? ' (غير متلامسة: دمج محدّب)' : '') : ids.length + ' houses merged' + (mode === 'hull' ? ' (not touching: convex hull)' : ''));
     return true;
   };
 })(window);

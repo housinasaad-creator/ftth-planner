@@ -39,8 +39,9 @@
   D.plan = function (blds, olt, opt) {
     opt = opt || {}; const s1 = opt.s1 || 4, s2 = opt.s2 || 4, cap = Math.max(s1, opt.cab || 48), B = FT.BASE_LOSS;
     const kx = Math.cos(olt.ll[1] * Math.PI / 180) * 111320, ky = 110540;
-    const P = blds.map(b => ({ id: b.id, c: b.c, ring: b.ring, o: b.o || {}, m: morton(Math.floor((b.c[0] * kx) / 6) & 0xffff, Math.floor((b.c[1] * ky) / 6) & 0xffff) })).sort((a, b) => a.m - b.m);
-    const fdbs = P.map(p => ({ b: p, ll: entrance(p.ring, p.c, olt.ll, p.id) }));
+    const P = blds.map(b => ({ id: b.id, c: b.c, ring: b.ring, house: b.house || null, o: b.o || {}, m: morton(Math.floor((b.c[0] * kx) / 6) & 0xffff, Math.floor((b.c[1] * ky) / 6) & 0xffff) })).sort((a, b) => a.m - b.m);
+    // the box stands exactly where the house marker is; a house whose marker was not computed yet gets it here, by the same rule
+    const fdbs = P.map(p => ({ b: p, ll: p.house ? p.house.slice() : FT.houses.inset(entrance(p.ring, p.c, olt.ll, p.id), p.c).map(v => +v.toFixed(7)) }));
     const nCab = Math.max(1, Math.ceil(fdbs.length / cap)), size = Math.ceil(fdbs.length / nCab), cabs = [];
     for (let i = 0; i < nCab; i++) { const g = fdbs.slice(i * size, (i + 1) * size); if (!g.length) break; cabs.push({ ll: FT.roads.snapPoint(avg(g.map(f => f.ll)), 60), fdbs: g }); }
     cabs.sort((a, b) => morton(Math.floor(a.ll[0] * kx / 20) & 0xffff, Math.floor(a.ll[1] * ky / 20) & 0xffff) - morton(Math.floor(b.ll[0] * kx / 20) & 0xffff, Math.floor(b.ll[1] * ky / 20) & 0xffff));
@@ -102,7 +103,7 @@
         const ps = Math.floor(k / plan.s1) + 1, p = k % plan.s1 + 1, code = FT.spec.codeFor(F, ps, p, 1, 1), o = f.b.o || {};
         const fdb = FT.addNode('bk', f.ll, { ratio: '1:' + plan.s2, name: code, code, label: o.num ? FT.num.label(o) : '', cat: 'c_bk', place: 'wall', bld: f.b.id }); tag('n', fdb.id); ids['f:' + i + ':' + k] = fdb.id;
         lay(f.route, D.MICRO, () => 'Distribution D01 · ' + code);
-        const b = S.bld[f.b.id] = S.bld[f.b.id] || {}; b.fdb = fdb.id; b.ll = f.b.c;
+        const b = S.bld[f.b.id] = S.bld[f.b.id] || {}; b.fdb = fdb.id; b.ll = f.ll.slice(); b.pt = f.ll.slice(); // the marker stays at its box
         if (opt && opt.homes && FT._designHomes < 900) { S.seq.sub++; FT._designHomes++; const sub = { id: FT.uid('s'), name: 'ONT-' + S.seq.sub, node: fdb.id, bld: f.b.id, ll: f.b.c, port: 1 }; S.subs[sub.id] = sub; b.st = 1; const dr = FT.addCable([fdb.ll, f.b.c], fdb.id, fdb.id, 'dr2', 'free', [fdb.id, fdb.id], [[fdb.ll, f.b.c]]); dr.name = 'Drop ' + sub.name; dr.sub = sub.id; tag('c', dr.id); }
       });
     });

@@ -132,7 +132,8 @@
     Object.values(S.nodes).forEach(n => f.push({ type: 'Feature', properties: { kind: 'node', type: n.type, name: n.name, code: n.code || '', ratio: n.ratio, label: n.label }, geometry: { type: 'Point', coordinates: n.ll } }));
     Object.values(S.pipes).forEach(p => f.push({ type: 'Feature', properties: { kind: 'pipe', name: p.name, length_m: +FT.pathLen(p.pts).toFixed(2), cat: p.cat }, geometry: { type: 'LineString', coordinates: p.pts } }));
     Object.values(S.cables).forEach(c => { const pts = [].concat(...FT.cableSpans(c).map((s, i) => i ? s.pts.slice(1) : s.pts)); f.push({ type: 'Feature', properties: { kind: 'cable', name: c.name, core: c.core, std: c.std, length_m: +FT.cableLength(c).toFixed(2) }, geometry: { type: 'LineString', coordinates: pts } }); });
-    Object.entries(S.bld).forEach(([id, o]) => { if (o.num || o.fp) f.push({ type: 'Feature', properties: { kind: 'building', id, number: FT.num.label(o), floors: o.floors || null }, geometry: o.fp ? { type: 'Polygon', coordinates: [o.fp.concat([o.fp[0]])] } : { type: 'Point', coordinates: [0, 0] } }); });
+    FT.map.housesData().forEach(h => f.push({ type: 'Feature', properties: { kind: 'house', id: h.id, number: h.num, floors: h.floors, fdb: h.fdb, name: h.name }, geometry: { type: 'Point', coordinates: h.ll } }));
+    Object.entries(S.bld).forEach(([id, o]) => { if (o.fp && !o.deleted) f.push({ type: 'Feature', properties: { kind: 'building_drawing', id }, geometry: { type: 'Polygon', coordinates: [o.fp.concat([o.fp[0]])] } }); });
     download('ftth_network_' + stamp() + '.geojson', JSON.stringify({ type: 'FeatureCollection', features: f }), 'application/geo+json');
   };
 
@@ -154,7 +155,7 @@
     k += '<Folder><name>Nodes</name>' + Object.values(S.nodes).map(n => '<Placemark><name>' + esc(n.name) + '</name><description>' + esc(n.type.toUpperCase() + (n.ratio ? ' ' + n.ratio : '')) + '</description><Point><coordinates>' + n.ll[0] + ',' + n.ll[1] + ',0</coordinates></Point></Placemark>').join('') + '</Folder>';
     k += '<Folder><name>Pipes</name>' + Object.values(S.pipes).map(p => '<Placemark><name>' + esc(p.name) + '</name><styleUrl>#p</styleUrl><LineString><coordinates>' + ln(p.pts) + '</coordinates></LineString></Placemark>').join('') + '</Folder>';
     k += '<Folder><name>Cables</name>' + Object.values(S.cables).map(c => { const pts = [].concat(...FT.cableSpans(c).map((s, i) => i ? s.pts.slice(1) : s.pts)); return '<Placemark><name>' + esc(c.name) + '</name><description>' + esc(c.core + 'C ' + c.std + ' · ' + FT.fmtLen(FT.cableLength(c))) + '</description><styleUrl>#c</styleUrl><LineString><coordinates>' + ln(pts) + '</coordinates></LineString></Placemark>'; }).join('') + '</Folder>';
-    k += '<Folder><name>Numbered buildings</name>' + Object.entries(S.bld).filter(([, o]) => o.num && o.fp).map(([id, o]) => '<Placemark><name>' + esc(FT.num.label(o)) + '</name><Polygon><outerBoundaryIs><LinearRing><coordinates>' + ln(o.fp.concat([o.fp[0]])) + '</coordinates></LinearRing></outerBoundaryIs></Polygon></Placemark>').join('') + '</Folder>';
+    k += '<Folder><name>Numbered houses</name>' + FT.map.housesData().filter(h => h.num).map(h => '<Placemark><name>' + esc(h.num) + '</name><Point><coordinates>' + h.ll[0] + ',' + h.ll[1] + ',0</coordinates></Point></Placemark>').join('') + '</Folder>';
     return k + '</Document></kml>';
   };
   X.zipOne = zipOne; X.kmz = function () { FT.deliver.kmz(); };
