@@ -1,7 +1,7 @@
 /* Background worker: street graph + auto-design planning run here, on another CPU thread, so the map and the panels never freeze.
    It lives inside the same browser tab on the same computer (no server, no network). It only computes: it never touches the screen. */
 self.window = self;
-importScripts('model.js', 'roads.js', 'design.js');
+importScripts('model.js', 'roads.js', 'trench.js', 'design.js');
 const FT = self.FT;
 self.onmessage = e => {
   const m = e.data;

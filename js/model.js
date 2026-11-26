@@ -37,6 +37,7 @@
     { id: 'bb432', group: 'Feeder', name: 'Feeder 432C (36×12) loose-tube G.652.D', core: 432, tubes: 36, std: 'G.652.D', struct: 'loose_tube', od: 18 },
     { id: 'bb576', group: 'Feeder', name: 'Feeder 576C (48×12) loose-tube G.652.D', core: 576, tubes: 48, std: 'G.652.D', struct: 'loose_tube', od: 20 },
     { id: 'bb864', group: 'Feeder', name: 'Feeder 864C (72×12) loose-tube G.652.D', core: 864, tubes: 72, std: 'G.652.D', struct: 'loose_tube', od: 23 },
+    { id: 'mf4',   group: 'Distribution', name: 'Distribution micro cable 4F G.652.D (air-blown)', core: 4, tubes: 1, std: 'G.652.D', struct: 'loose_tube', od: 4 },
     { id: 'ds24',  group: 'Distribution', name: 'Distribution 24C (2×12) loose-tube G.652.D', core: 24, tubes: 2, std: 'G.652.D', struct: 'loose_tube', od: 6.5 },
     { id: 'ds48',  group: 'Distribution', name: 'Distribution 48C (4×12) loose-tube G.652.D', core: 48, tubes: 4, std: 'G.652.D', struct: 'loose_tube', od: 8 },
     { id: 'ds96',  group: 'Distribution', name: 'Distribution 96C (8×12) loose-tube G.652.D', core: 96, tubes: 8, std: 'G.652.D', struct: 'loose_tube', od: 10 },
@@ -54,6 +55,7 @@
     { id: 'aer', name: 'Aerial on walls (ST approval)', type: 'aerial' },
     { id: 'mc12', name: 'Microduct bundle 12 ways Ø12/10 (max 12, +1 spare)', type: 'microduct', ways: 12, idmm: 10 },
     { id: 'mc7', name: 'Microduct bundle 7 ways Ø14/12', type: 'microduct', ways: 7, idmm: 12 },
+    { id: 'md2', name: 'Micro duct to one building: 2 ways Ø12/10 (1 + 1 spare)', type: 'microduct', ways: 2, idmm: 10 },
   ];
   FT.PIPE_TYPES = ['hdpe', 'microduct', 'aerial', 'custom'];
   FT.NODE_CAT = [
@@ -183,19 +185,23 @@
     // consecutive node pairs; span medium = pipe if a pipe joins them else cable.medium
     const out = [], ids = c.nodes || [c.a, c.b];
     for (let i = 1; i < ids.length; i++) {
-      const p = FT.pipeBetween(ids[i - 1], ids[i]), A = FT.state.nodes[ids[i - 1]], B = FT.state.nodes[ids[i]];
+      const A = FT.state.nodes[ids[i - 1]], B = FT.state.nodes[ids[i]];
       if (!A || !B) continue;
       const own = c.segs && c.segs[i - 1] && c.segs[i - 1].length >= 2 ? c.segs[i - 1] : null;
+      // a cable of a shared-trench design follows its own route: another run may join the same two chambers by a different street
+      const p = c.shared && own ? null : FT.pipeBetween(ids[i - 1], ids[i]);
       const pts = p ? (p.a === ids[i - 1] ? p.pts : p.pts.slice().reverse()) : (own || [A.ll, B.ll]);
-      out.push({ from: ids[i - 1], to: ids[i], medium: p ? 'duct' : c.medium, pipe: p ? p.id : null, len: FT.pathLen(pts), pts });
+      out.push({ from: ids[i - 1], to: ids[i], medium: p || (c.shared && own) ? 'duct' : c.medium, pipe: p ? p.id : null, len: FT.pathLen(pts), pts });
     }
     return out;
   };
   FT.cableLength = c => FT.cableSpans(c).reduce((s, x) => s + x.len, 0);
   FT.deleteNode = function (id) {
-    const S = FT.state; delete S.nodes[id]; pipeIdx = null;
-    Object.values(S.pipes).forEach(p => { if (p.a === id || p.b === id) delete S.pipes[p.id]; });
-    Object.values(S.cables).forEach(c => { if (c.nodes.includes(id)) delete S.cables[c.id]; });
+    const S = FT.state, gone = S.nodes[id], chamber = !!gone && !FT.BOX_TYPES.includes(gone.type) && gone.type !== 'olt'; delete S.nodes[id]; pipeIdx = null;
+    // shared-trench design: removing a chamber must not wipe the many cables that only pass through it
+    Object.values(S.pipes).forEach(p => { if (p.a !== id && p.b !== id) return; if (chamber && p.load) { if (p.a === id) p.a = null; if (p.b === id) p.b = null; } else delete S.pipes[p.id]; });
+    Object.values(S.cables).forEach(c => { if (!c.nodes.includes(id)) return; const i = c.nodes.indexOf(id);
+      if (chamber && c.shared && c.segs && i > 0 && i < c.nodes.length - 1) { c.segs.splice(i - 1, 2, c.segs[i - 1].concat(c.segs[i].slice(1))); c.nodes.splice(i, 1); } else delete S.cables[c.id]; });
     Object.values(S.splices).forEach(s => { if (s.node === id) delete S.splices[s.id]; });
   };
   FT.deletePipe = id => { delete FT.state.pipes[id]; pipeIdx = null; };
@@ -204,8 +210,8 @@
   // ---------------- material prices (USD) and automatic costing ----------------
   // Defaults are rough market estimates so the first project is not empty; the user edits them to the real supplier prices.
   FT.DEFAULT_PRICES = {
-    cable: { bb96: 1.6, bb144: 2.2, bb288: 4.0, bb432: 5.8, bb576: 7.6, bb864: 11.0, ds24: 0.55, ds48: 0.9, ds96: 1.6, dr12: 0.7, dr1: 0.12, dr2: 0.15, dr4: 0.25 },   // USD per metre
-    pipe: { h32: 0.45, h40: 0.6, h50: 0.8, aer: 0.35, mc12: 2.4, mc7: 1.8 },                                                                                     // USD per metre
+    cable: { bb96: 1.6, bb144: 2.2, bb288: 4.0, bb432: 5.8, bb576: 7.6, bb864: 11.0, mf4: 0.22, ds24: 0.55, ds48: 0.9, ds96: 1.6, dr12: 0.7, dr1: 0.12, dr2: 0.15, dr4: 0.25 },   // USD per metre
+    pipe: { h32: 0.45, h40: 0.6, h50: 0.8, aer: 0.35, mc12: 2.4, mc7: 1.8, md2: 0.6 },                                                                                     // USD per metre
     node: { olt: 4500, sk: 450, dk: 140, bk: 38, mh: 120, hh: 45, pole: 85 },                                                                                            // USD each
     splitter: { '1:2': 4, '1:4': 8, '1:8': 14, '1:16': 30, '1:32': 55 },                                                                                         // USD each (inside SK/DK/BK)
     splice: 35,                                                                                                                                                  // USD per splice closure
@@ -220,7 +226,7 @@
     const add = (kind, name, qty, unit, price) => { if (qty > 0) lines.push({ kind, name, qty, unit, price, total: qty * price }); };
     const cab = {}, pip = {}, nod = {}, spl = {};
     Object.values(S.cables).filter(c => inS('cables', c.id)).forEach(c => { cab[c.cat] = (cab[c.cat] || 0) + FT.cableLength(c); });
-    Object.values(S.pipes).filter(p => inS('pipes', p.id)).forEach(p => { pip[p.cat] = (pip[p.cat] || 0) + FT.pathLen(p.pts); });
+    let runM = 0; Object.values(S.pipes).filter(p => inS('pipes', p.id)).forEach(p => { const l = FT.pathLen(p.pts); runM += l; pip[p.cat] = (pip[p.cat] || 0) + l * (p.qty || 1); });
     Object.values(S.nodes).filter(n => inS('nodes', n.id)).forEach(n => { nod[n.type] = (nod[n.type] || 0) + 1; if (n.ratio) spl[n.ratio] = (spl[n.ratio] || 0) + (n.nsplit || 1); });
     Object.keys(cab).forEach(id => { const c = FT.CABLE_CAT.find(x => x.id === id); add('cable', c ? c.name.split(' loose')[0] : id, cab[id], 'm', P.cable[id] || 0); });
     Object.keys(pip).forEach(id => { const c = FT.PIPE_CAT.find(x => x.id === id); add('pipe', c ? c.name : id, pip[id], 'm', P.pipe[id] || 0); });
@@ -229,7 +235,7 @@
     Object.keys(spl).forEach(r => add('splitter', 'Splitter ' + r, spl[r], 'pc', P.splitter[r] || 0));
     add('splice', 'Splice closure', Object.values(S.splices).filter(s => inS('nodes', s.node)).length, 'pc', P.splice);
     const wd = {}; Object.values(scope ? {} : (S.wdev || {})).forEach(d => { wd[d.type] = (wd[d.type] || 0) + 1; }); Object.keys(wd).forEach(t => add('wdev', t.toUpperCase() + ' radio', wd[t], 'pc', P.wdev[t] || 0));
-    const pm = Object.values(pip).reduce((a, b) => a + b, 0), cm = Object.values(cab).reduce((a, b) => a + b, 0);
+    const pm = runM, cm = Object.values(cab).reduce((a, b) => a + b, 0);
     add('labour', 'Pipe installation', pm, 'm', P.labour.pipe_m); add('labour', 'Cable installation', cm, 'm', P.labour.cable_m);
     return { lines, total: lines.reduce((a, l) => a + l.total, 0) };
   };
@@ -239,7 +245,7 @@
     const S = FT.state, rows = [], inScope = (set, id) => !scope || scope[set].has(id);
     const cab = {}, pip = {}, nod = {};
     Object.values(S.cables).filter(c => inScope('cables', c.id)).forEach(c => { const k = c.name + ' · ' + c.core + 'C ' + c.std; (cab[k] = cab[k] || { n: 0, len: 0 }); cab[k].n++; cab[k].len += FT.cableLength(c); });
-    Object.values(S.pipes).filter(p => inScope('pipes', p.id)).forEach(p => { const cat = FT.PIPE_CAT.find(x => x.id === p.cat); const k = cat ? cat.name : p.ptype; (pip[k] = pip[k] || { n: 0, len: 0 }); pip[k].n++; pip[k].len += FT.pathLen(p.pts); });
+    Object.values(S.pipes).filter(p => inScope('pipes', p.id)).forEach(p => { const cat = FT.PIPE_CAT.find(x => x.id === p.cat); const k = cat ? cat.name : p.ptype; (pip[k] = pip[k] || { n: 0, len: 0 }); pip[k].n += p.qty || 1; pip[k].len += FT.pathLen(p.pts) * (p.qty || 1); });
     Object.values(S.nodes).filter(n => inScope('nodes', n.id)).forEach(n => { const k = (FT.NODE_TYPES[n.type] ? FT.NODE_TYPES[n.type].short : n.type.toUpperCase()) + (n.ratio ? ' ' + n.ratio : ''); nod[k] = (nod[k] || 0) + 1; });
     Object.entries(cab).forEach(([k, v]) => rows.push({ kind: 'cable', name: k, qty: v.n, len: v.len }));
     Object.entries(pip).forEach(([k, v]) => rows.push({ kind: 'pipe', name: k, qty: v.n, len: v.len }));

@@ -22,6 +22,7 @@
     return FT.nearestOnPath(target, closed).pt;
   }
   D.SPLITS = [[4, 4], [2, 8], [8, 2]]; // stage 1 x stage 2 = 16
+  D.MICRO = 'mf4'; // one small air-blown cable per box: 1 fibre in use, the rest spare (the specification asks for a spare fibre per building)
   D.feederCat = fibres => { const need = fibres + Math.max(2, Math.ceil(fibres * 0.2)); const c = FT.CABLE_CAT.filter(x => x.group === 'Feeder').find(x => x.core >= need); return (c || FT.CABLE_CAT.filter(x => x.group === 'Feeder').pop()).id; };
 
   // a long route gets a handhole (HH) every <= 230 m, so the distance between MH/HH never exceeds the 250 m limit
@@ -54,7 +55,13 @@
         const km = (cab.len + f.len + 100) / 1000; f.loss = FT.SPLITTER_LOSS['1:' + s1] + FT.SPLITTER_LOSS['1:' + s2] + km * B.fiber1490 + 6 * B.connector + 4 * B.splice; worstLoss = Math.max(worstLoss, f.loss); if (f.loss > FT.LIMITS.maxLoss) over++;
       });
     });
-    return { olt, cabs, s1, s2, straight, homes: P.length, fdbCount: P.length, fdcCount: cabs.length, splitters, ports, feeder, dist, worstLoss, over, ok: over === 0 };
+    // all routes of the design share trenches, duct bundles and handholes
+    const odOf = id => (FT.CABLE_CAT.find(x => x.id === id) || {}).od || 11, routes = [], at = [];
+    cabs.forEach((cab, ci) => { at.push([ci, -1]); routes.push({ layer: 'f', pts: cab.path, from: 'o', to: 'c:' + ci, od: odOf(cab.cat) });
+      cab.fdbs.forEach((f, fi) => { at.push([ci, fi]); routes.push({ layer: 'd', pts: f.path, from: 'c:' + ci, to: 'f:' + ci + ':' + fi, od: odOf(D.MICRO) }); }); });
+    const tr = FT.trench.build(routes);
+    tr.routes.forEach((r, i) => { const [ci, fi] = at[i]; (fi < 0 ? cabs[ci] : cabs[ci].fdbs[fi]).route = r; });
+    return { olt, cabs, s1, s2, straight, hhs: tr.hhs, pipes: tr.pipes, trenchM: tr.runM, homes: P.length, fdbCount: P.length, fdcCount: cabs.length, splitters, ports, feeder, dist, worstLoss, over, ok: over === 0 };
   };
   // ---- the same planning, but on a background thread (the page keeps moving while it computes) ----
   let W; const wait = new Map(); let wid = 0; D.useWorker = true;
@@ -84,24 +91,25 @@
   D.apply = function (plan, opt) {
     const S = FT.state; FT.commit(); S.seq.design = (S.seq.design || 0) + 1; const fid = FT.uid('f'), fname = 'Design-' + S.seq.design; (S.folders = S.folders || {})[fid] = { name: fname }; S.fmap = S.fmap || {};
     const tag = (k, id) => { S.fmap[k + ':' + id] = fid; };
-    const link = (a, b, path, ptype, pcat, ccat) => { // pipes + one cable through handholes
-      const segs = D.split(path), ids = [a];
-      segs.forEach((sg, i) => { if (i < segs.length - 1) { const hh = FT.addNode('hh', sg[sg.length - 1], { cat: 'c_fm', place: 'buried' }); tag('n', hh.id); ids.push(hh.id); } }); ids.push(b);
-      segs.forEach((sg, i) => { const pp = FT.addPipe(sg, ids[i], ids[i + 1], ptype, pcat); tag('p', pp.id); });
-      const c = FT.addCable(path, a, b, ccat, 'free', ids, segs); tag('c', c.id); return c;
-    };
+    const ids = { o: plan.olt.id }, id = r => r ? ids[r] : null;
+    const cables = []; // laid once every node exists
+    const lay = (route, ccat, name) => cables.push({ route, ccat, name });
     let maxF = 0; Object.values(S.nodes).forEach(n => { const m = /^F(\d+)-PS/.exec(n.code || ''); if (m) maxF = Math.max(maxF, +m[1]); });
     plan.cabs.forEach((cab, i) => {
-      const F = ++maxF, fdc = FT.addNode('sk', cab.ll, { ratio: '1:' + plan.s1, nsplit: cab.nsplit, name: 'FDC-F' + pad(F), code: 'F' + pad(F) + '-PS01', cat: 'c_sk', place: 'buried' }); tag('n', fdc.id);
-      const fc = link(plan.olt.id, fdc.id, cab.path, 'hdpe', 'h40', cab.cat); fc.name = 'Feeder F' + pad(F) + ' · ' + fc.core + 'C';
+      const F = ++maxF, fdc = FT.addNode('sk', cab.ll, { ratio: '1:' + plan.s1, nsplit: cab.nsplit, name: 'FDC-F' + pad(F), code: 'F' + pad(F) + '-PS01', cat: 'c_sk', place: 'buried' }); tag('n', fdc.id); ids['c:' + i] = fdc.id;
+      lay(cab.route, cab.cat, c => 'Feeder F' + pad(F) + ' · ' + c.core + 'C');
       cab.fdbs.forEach((f, k) => {
         const ps = Math.floor(k / plan.s1) + 1, p = k % plan.s1 + 1, code = FT.spec.codeFor(F, ps, p, 1, 1), o = f.b.o || {};
-        const fdb = FT.addNode('bk', f.ll, { ratio: '1:' + plan.s2, name: code, code, label: o.num ? FT.num.label(o) : '', cat: 'c_bk', place: 'wall', bld: f.b.id }); tag('n', fdb.id);
-        const dc = link(fdc.id, fdb.id, f.path, 'microduct', 'mc12', 'ds24'); dc.name = 'Distribution D01 · ' + code;
+        const fdb = FT.addNode('bk', f.ll, { ratio: '1:' + plan.s2, name: code, code, label: o.num ? FT.num.label(o) : '', cat: 'c_bk', place: 'wall', bld: f.b.id }); tag('n', fdb.id); ids['f:' + i + ':' + k] = fdb.id;
+        lay(f.route, D.MICRO, () => 'Distribution D01 · ' + code);
         const b = S.bld[f.b.id] = S.bld[f.b.id] || {}; b.fdb = fdb.id; b.ll = f.b.c;
         if (opt && opt.homes && FT._designHomes < 900) { S.seq.sub++; FT._designHomes++; const sub = { id: FT.uid('s'), name: 'ONT-' + S.seq.sub, node: fdb.id, bld: f.b.id, ll: f.b.c, port: 1 }; S.subs[sub.id] = sub; b.st = 1; const dr = FT.addCable([fdb.ll, f.b.c], fdb.id, fdb.id, 'dr2', 'free', [fdb.id, fdb.id], [[fdb.ll, f.b.c]]); dr.name = 'Drop ' + sub.name; dr.sub = sub.id; tag('c', dr.id); }
       });
     });
+    (plan.hhs || []).forEach((ll, i) => { const hh = FT.addNode('hh', ll, { cat: 'c_fm', place: 'buried' }); tag('n', hh.id); ids['h:' + i] = hh.id; }); // after the cabinets and boxes, so the tree lists those first
+    // shared ducts: one run per stretch, sized to what is inside (a run may end at a street branch, without a chamber)
+    plan.pipes.forEach(r => { const d = FT.trench.duct(r.layer, r.load, r.od), pp = FT.addPipe(r.pts, id(r.a), id(r.b), d.ptype, d.cat); pp.load = r.load; pp.qty = d.qty; pp.od = r.od; tag('p', pp.id); });
+    cables.forEach(x => { const nodeIds = x.route.nodes.map(id), segs = x.route.segs, path = [].concat(...segs.map((s, i) => i ? s.slice(1) : s)); const c = FT.addCable(path, nodeIds[0], nodeIds[nodeIds.length - 1], x.ccat, 'duct', nodeIds, segs); c.name = x.name(c); c.shared = 1; tag('c', c.id); });
     FT.changed('design'); return fname;
   };
 
@@ -119,6 +127,7 @@
         '<div class="fl"><input type="checkbox" id="dsHomes"' + (homes ? ' checked' : '') + '><span>' + (ar() ? 'ارسم كبل مشترك لكل مبنى (للتخطيط فقط — خارج نطاق المقاول)' : 'Draw a drop cable to each building (planning only — outside the contractor scope)') + '</span></div>' + (busy || !plan ? '<div class="warnbox" style="background:#12202e;border-color:#2a5a7a;color:#9ad0ff">⏳ ' + (ar() ? 'جاري حساب التصميم بالخلفية… الخريطة تضل شغالة.' : 'Computing the design in the background… the map stays usable.') + '</div>' : (
         '<div class="kv"><span>' + FT.t('buildings') + ' = FDB</span><b>' + plan.fdbCount + '</b></div><div class="kv"><span>FDC</span><b>' + plan.fdcCount + ' · ' + plan.splitters + ' × 1:' + plan.s1 + '</b></div>' +
         '<div class="kv"><span>' + (ar() ? 'منافذ PON في الـ OLT (ألياف التغذية)' : 'OLT PON ports (feeder fibres)') + '</span><b>' + plan.ports + '</b></div>' +
+        '<div class="kv"><span>' + (ar() ? 'طول مسارات الأنابيب المشتركة' : 'Shared duct runs') + '</span><b>' + FT.lt(FT.fmtLenShort(plan.trenchM)) + '</b></div><div class="kv"><span>' + (ar() ? 'غرف تفتيش HH' : 'Handholes (HH)') + '</span><b>' + plan.hhs.length + '</b></div>' +
         '<div class="kv"><span>' + (ar() ? 'كبلات التغذية (OLT→FDC)' : 'Feeder cables (OLT→FDC)') + '</span><b>' + FT.lt(FT.fmtLenShort(plan.feeder)) + '</b></div><div class="kv"><span>' + (ar() ? 'كبلات التوزيع (FDC→FDB)' : 'Distribution (FDC→FDB)') + '</span><b>' + FT.lt(FT.fmtLenShort(plan.dist)) + '</b></div>' +
         '<div class="kv"><span>' + (ar() ? 'أسوأ فقد عند الـ ONT (الحد 28 dB)' : 'Worst loss at the ONT (limit 28 dB)') + '</span><b style="color:' + (plan.ok ? 'var(--ok)' : 'var(--bad)') + '">' + FT.lt(plan.worstLoss.toFixed(1) + ' dB') + '</b></div>' +
         (plan.straight ? '<div class="warnbox">' + (ar() ? plan.straight + ' مسار ما لقى شارعًا قريبًا فرُسم خطًا مستقيمًا — راجعه يدويًا (قد يمرّ فوق بيوت).' : plan.straight + ' route(s) found no street nearby and are straight lines — check them by hand (they may cross houses).') + '</div>' : '') + (plan.ok ? '' : '<div class="warnbox">' + (ar() ? plan.over + ' علبة FDB تتجاوز 28 dB — قرّب الـ OLT أو قلّل سعة الخزانة.' : plan.over + ' FDB exceed 28 dB — move the OLT closer or reduce the cabinet size.') + '</div>') +

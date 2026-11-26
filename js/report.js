@@ -25,7 +25,7 @@
     const cabLen = new Map(cables.map(c => [c.id, FT.cableLength(c)]));
     const cabByType = group(cables, c => (FT.CABLE_CAT.find(x => x.id === c.cat) || {}).name || c.cat, c => cabLen.get(c.id)).sort((a, b) => b.len - a.len);
     const cabByGroup = group(cables, cabGroup, c => cabLen.get(c.id)).sort((a, b) => b.len - a.len);
-    const pipByType = group(pipes, p => (FT.PIPE_CAT.find(x => x.id === p.cat) || {}).name || p.ptype, p => FT.pathLen(p.pts)).sort((a, b) => b.len - a.len);
+    const pipByType = group(pipes, p => (FT.PIPE_CAT.find(x => x.id === p.cat) || {}).name || p.ptype, p => FT.pathLen(p.pts) * (p.qty || 1)).sort((a, b) => b.len - a.len);
     const nodeByType = Object.keys(FT.NODE_TYPES).map(t => ({ type: t, name: FT.NODE_TYPES[t].short, full: FT.nodeTypeName(t), n: nodes.filter(n => n.type === t).length })).filter(x => x.n);
     const splitters = group(nodes.filter(n => n.ratio), n => n.ratio).map(g => ({ name: g.name, n: g.items.reduce((a, n) => a + (n.nsplit || 1), 0) })).sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
     const inScope = new Set(nodes.map(n => n.id));
@@ -40,7 +40,7 @@
     const withFdb = new Set(nodes.filter(n => n.type === 'bk' && n.bld).map(n => n.bld)).size;
     return {
       nodes, pipes, cables, cabByType, cabByGroup, pipByType, nodeByType, splitters, fdb, fed, fdc: [...fdcRows.values()].sort((a, b) => String(a.node.code || a.node.name).localeCompare(String(b.node.code || b.node.name), undefined, { numeric: true })), subs, splices, cost, buildings, withFdb,
-      pipeM: pipByType.reduce((a, g) => a + g.len, 0), cableM: cabByType.reduce((a, g) => a + g.len, 0),
+      pipeM: pipes.reduce((a, p) => a + FT.pathLen(p.pts), 0), cableM: cabByType.reduce((a, g) => a + g.len, 0),
       fibreKm: cables.reduce((a, c) => a + cabLen.get(c.id) / 1000 * (c.core || 0), 0), worst: fed.length ? Math.max(...fed.map(r => r.loss)) : null, soc: FT.spec.soc(),
     };
   };
@@ -107,7 +107,7 @@
     const count = t => (d.nodeByType.find(x => x.type === t) || { n: 0 }).n;
     let n = 0, h = '';
     h += '<header class="cover"><div class="brand"><span class="mark">F</span><div><b>FTTH Planner</b><small>' + T('تقرير تخطيط شبكة الألياف الضوئية', 'Fibre network planning report') + '</small></div></div><h1>' + esc(name) + '</h1><div class="meta"><span class="scope">' + (scope ? T('تقرير لمنطقة محددة', 'Selected area') : T('المشروع كامل', 'Whole project')) + '</span>' + (ring ? '<span>' + T('المساحة', 'Area') + ' ' + ltr(num(FT.ringArea(ring) / 1e6, 3) + ' km²') + '</span>' : '') + '<span>' + ltr(date) + '</span></div></header>';
-    h += '<div class="kpis">' + kpi(ltr(num(count('sk'))), T('خزائن FDC', 'FDC cabinets'), '#ff8a3d') + kpi(ltr(num(count('bk'))), T('علب FDB', 'FDB boxes'), '#ff4f7a') + kpi(ltr(num(count('mh') + count('hh'))), T('مناهل وغرف', 'Manholes + handholes'), '#6b7280') + kpi(ltr(len(d.pipeM)), T('طول الأنابيب', 'Duct length'), '#2aa8ff') + kpi(ltr(len(d.cableM)), T('طول الكابلات', 'Cable length'), '#9d5cf0') + kpi(ltr(num(d.fibreKm, 1)), T('كيلومتر ليف', 'Fibre km'), '#17b9a4') +
+    h += '<div class="kpis">' + kpi(ltr(num(count('sk'))), T('خزائن FDC', 'FDC cabinets'), '#ff8a3d') + kpi(ltr(num(count('bk'))), T('علب FDB', 'FDB boxes'), '#ff4f7a') + kpi(ltr(num(count('mh') + count('hh'))), T('مناهل وغرف', 'Manholes + handholes'), '#6b7280') + kpi(ltr(len(d.pipeM)), T('طول مسارات الأنابيب', 'Duct route length'), '#2aa8ff') + kpi(ltr(len(d.cableM)), T('طول الكابلات', 'Cable length'), '#9d5cf0') + kpi(ltr(num(d.fibreKm, 1)), T('كيلومتر ليف', 'Fibre km'), '#17b9a4') +
       kpi(ltr(ring ? num(d.buildings) : num(d.withFdb)), ring ? T('مبانٍ داخل المنطقة', 'Buildings in the area') : T('مبانٍ لها علبة', 'Buildings with a box'), '#a9825a') + kpi(ltr(d.worst == null ? '—' : d.worst.toFixed(1) + ' dB'), T('أسوأ فقد (الحد ' + L + ')', 'Worst loss (limit ' + L + ')'), d.worst != null && d.worst > L ? '#e5484d' : '#17a86b') + kpi(ltr(d.soc.ok + ' / ' + socN), T('بنود مطابقة للمواصفات', 'Specification checks passed'), d.soc.bad ? '#e5484d' : '#17a86b') + (priced ? kpi(ltr(money(d.cost.total)), T('الكلفة التقديرية', 'Estimated cost'), '#ff6a3d') : '') + '</div>';
     const map = R.mapSvg(d, ring); if (map) h += sec(++n, T('خريطة النطاق', 'Map of the scope'), map + legend(d), 'keep');
     h += sec(++n, T('توزيع الكابلات والأنابيب', 'Cables and ducts'), '<div class="two"><div><h3>' + T('طول الكابلات حسب الوظيفة', 'Cable length by role') + '</h3>' + donut(d.cabByGroup.map(g => ({ k: T({ Feeder: 'تغذية', Backbone: 'تغذية', Distribution: 'توزيع', Drop: 'مشترك' }[g.name] || g.name, g.name), v: g.len, c: CAB_COL[g.name] })), len, len(d.cableM)) + '</div><div><h3>' + T('طول الأنابيب حسب النوع', 'Duct length by type') + '</h3>' + bars(d.pipByType.map(g => ({ k: g.name, v: g.len })), len) + '</div></div>' +

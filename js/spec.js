@@ -87,17 +87,24 @@
     add('ratios', 'نسب المقسّمات المسموحة: 1:2 · 1:4 · 1:8 · 1:16', 'Allowed splitter ratios: 1:2, 1:4, 1:8, 1:16', badR.length ? 'bad' : noR.length ? 'warn' : 'ok', badR.length ? badR.length + ' علبة بنسبة غير مسموحة' : noR.length ? noR.length + ' علبة FDC/FDB بلا نسبة مقسّم' : 'كل النسب مطابقة', badR.length ? badR.length + ' box(es) with a ratio that is not allowed' : noR.length ? noR.length + ' FDC/FDB without a splitter ratio' : 'all ratios comply', badR.concat(noR).map(n => n.id));
     // 6 MH/HH spacing
     const longP = pipes.filter(p => p.ptype !== 'aerial' && FT.pathLen(p.pts) > L.maxSpan);
+    cables.forEach(c => { if (c.shared && c.segs && c.segs.some(s => FT.pathLen(s) > L.maxSpan + 0.5)) longP.push(c); });
     add('span', 'المسافة بين المناهل/الغرف ≤ 250 م', 'Distance between MH/HH ≤ 250 m', !pipes.length ? 'na' : longP.length ? 'bad' : 'ok', longP.length ? longP.length + ' أنبوب أطول من 250 م (أضف HH وسيطة)' : 'كل الأنابيب ≤ 250 م', longP.length ? longP.length + ' pipe(s) longer than 250 m (add an intermediate HH)' : 'all pipes ≤ 250 m', longP.map(p => p.id));
     // 7 trench
     const buried = pipes.filter(p => p.ptype !== 'aerial'), badT = buried.filter(p => (p.depth || 30) > L.trenchDepth || (p.width || 6) > L.trenchWidth || (p.cover == null ? 10 : p.cover) < L.minCover);
     add('trench', 'الخندق الدقيق: عمق ≤ 30 سم، عرض ≤ 6 سم، غطاء ≥ 10 سم', 'Micro-trench: depth ≤ 30 cm, width ≤ 6 cm, cover ≥ 10 cm', !buried.length ? 'na' : badT.length ? 'bad' : 'ok', badT.length ? badT.length + ' أنبوب بأبعاد خندق مخالفة' : buried.length + ' أنبوب ضمن الحدود', badT.length ? badT.length + ' pipe(s) with trench dimensions out of limits' : buried.length + ' pipe(s) within limits', badT.map(p => p.id));
     // 8 fill / ways
     const use = {}; cables.forEach(c => FT.cableSpans(c).forEach(s => { if (s.pipe) (use[s.pipe] = use[s.pipe] || []).push(c); }));
-    const badF = []; pipes.forEach(p => { const cat = FT.PIPE_CAT.find(x => x.id === p.cat), cs = use[p.id] || []; if (!cat || !cs.length) return;
+    const badF = []; let shared = 0; pipes.forEach(p => { const cat = FT.PIPE_CAT.find(x => x.id === p.cat), cs = use[p.id] || []; if (!cat) return;
+      if (p.load) { // a shared run made by the auto design: p.load cables in p.qty ducts
+        shared++; const q = p.qty || 1;
+        if (cat.type === 'microduct') { if (p.load > q * ((cat.ways || 12) - 1)) badF.push(p.id); }
+        else if (cat.idmm) { if (p.load > q * Math.max(1, Math.floor(Math.pow(L.fillMax / 100 * cat.idmm / (p.od || 11), 2)))) badF.push(p.id); }
+        return; }
+      if (!cs.length) return;
       const od = c => (FT.CABLE_CAT.find(x => x.id === c.cat) || {}).od || 10;
       if (cat.type === 'microduct') { if (cs.length > (cat.ways || 12) - 1 || cs.some(c => od(c) / cat.idmm > L.fillMax / 100)) badF.push(p.id); }
       else if (cat.idmm) { const eq = Math.sqrt(cs.reduce((a, c) => a + od(c) ** 2, 0)); if (eq / cat.idmm > L.fillMax / 100) badF.push(p.id); } });
-    add('fill', 'امتلاء الأنبوب ≤ 70% (قطر الكبل ÷ القطر الداخلي) ومسار احتياطي واحد', 'Duct fill ≤ 70% (cable OD ÷ duct ID) and one spare way', !Object.keys(use).length ? 'na' : badF.length ? 'bad' : 'ok', badF.length ? badF.length + ' أنبوب مخالف (كبل أكبر من اللازم أو مسارات ممتلئة)' : 'كل الأنابيب ضمن 70%', badF.length ? badF.length + ' pipe(s) over the fill limit or without a spare way' : 'all ducts within 70%', badF);
+    add('fill', 'امتلاء الأنبوب ≤ 70% (قطر الكبل ÷ القطر الداخلي) ومسار احتياطي واحد', 'Duct fill ≤ 70% (cable OD ÷ duct ID) and one spare way', !Object.keys(use).length && !shared ? 'na' : badF.length ? 'bad' : 'ok', badF.length ? badF.length + ' أنبوب مخالف (كبل أكبر من اللازم أو مسارات ممتلئة)' : 'كل الأنابيب ضمن 70%', badF.length ? badF.length + ' pipe(s) over the fill limit or without a spare way' : 'all ducts within 70%', badF);
     // 9 poles / aerial
     const poles = nodes.filter(n => n.type === 'pole'), badPl = poles.filter(n => n.place !== 'wall'), aerial = pipes.filter(p => p.ptype === 'aerial');
     add('aerial', 'التعليق الهوائي على الجدران فقط وبموافقة ST (لا أعمدة)', 'Aerial only on walls with ST approval (no poles)', badPl.length ? 'bad' : (poles.length || aerial.length) ? 'warn' : 'ok', badPl.length ? badPl.length + ' نقطة تعليق ليست على جدار' : (poles.length || aerial.length) ? 'يوجد تعليق هوائي — يلزم موافقة ST خطية' : 'لا تعليق هوائي', badPl.length ? badPl.length + ' anchor(s) not on a wall' : (poles.length || aerial.length) ? 'aerial route present — written ST approval needed' : 'no aerial route', badPl.map(n => n.id));
