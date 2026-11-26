@@ -106,18 +106,28 @@
   };
 
   // ---------------- state ----------------
-  FT.blank = () => ({ v: 3, meta: { name: '', created: Date.now() }, nodes: {}, pipes: {}, cables: {}, splices: {}, bld: {}, subs: {}, wdev: {}, wlinks: {}, imports: {}, ord: {}, seq: { olt: 0, sk: 0, dk: 0, bk: 0, mh: 0, hh: 0, pole: 0, pipe: 0, cable: 0, splice: 0, sub: 0, design: 0, wdev: 0, wlink: 0 }, folders: {}, ui: { ratio: { sk: '', dk: '', bk: '' } } });
+  FT.blank = () => ({ v: 3, meta: { name: '', created: Date.now() }, nodes: {}, pipes: {}, cables: {}, splices: {}, bld: {}, subs: {}, wdev: {}, wlinks: {}, imports: {}, users: {}, ord: {}, seq: { olt: 0, sk: 0, dk: 0, bk: 0, mh: 0, hh: 0, pole: 0, pipe: 0, cable: 0, splice: 0, sub: 0, design: 0, wdev: 0, wlink: 0 }, folders: {}, ui: { ratio: { sk: '', dk: '', bk: '' } } });
   FT.state = FT.blank();
   FT.listeners = [];
   FT.onChange = fn => FT.listeners.push(fn);
   let undo = [], redo = [], batchDepth = 0;
   const snap = () => JSON.stringify(FT.state);
+  const entry = () => ({ s: snap(), skip: new Set() }); // skip = items a teammate changed after this point: undo must leave them alone
   FT.commit = function (reason) { // call BEFORE mutating
-    undo.push(snap()); if (undo.length > 80) undo.shift(); redo = [];
+    undo.push(entry()); if (undo.length > 80) undo.shift(); redo = [];
   };
+  const UNDO_COLLS = ['nodes', 'pipes', 'cables', 'splices', 'bld', 'subs', 'wdev', 'wlinks', 'imports', 'folders', 'fmap'];
+  function restore(e) {
+    const old = JSON.parse(e.s); if (!FT.team) { FT.state = old; return; }
+    // team project: put back only what I changed, item by item (never the teammates' work, never the shared number counters)
+    const S = FT.state;
+    UNDO_COLLS.forEach(c => { const a = S[c] = S[c] || {}, b = old[c] || {}; new Set(Object.keys(a).concat(Object.keys(b))).forEach(k => { if (e.skip.has(c + '/' + k)) return; if (!(k in b)) delete a[k]; else if (!(k in a) || JSON.stringify(a[k]) !== JSON.stringify(b[k])) a[k] = b[k]; }); });
+    S.ord = S.ord || {}; new Set(Object.keys(S.ord).concat(Object.keys(old.ord || {}))).forEach(k => { if (e.skip.has('ord/' + k)) return; if (old.ord && old.ord[k]) S.ord[k] = old.ord[k]; else delete S.ord[k]; });
+  }
+  FT.noteRemote = keys => { undo.concat(redo).forEach(e => keys.forEach(k => e.skip.add(k))); };
   FT.changed = function (why) { FT.dropPipeIndex && FT.dropPipeIndex(); FT.listeners.forEach(fn => { try { fn(why); } catch (e) { console.error(e); } }); };
-  FT.undo = function () { if (!undo.length) return false; redo.push(snap()); FT.state = JSON.parse(undo.pop()); FT.changed('undo'); return true; };
-  FT.redo = function () { if (!redo.length) return false; undo.push(snap()); FT.state = JSON.parse(redo.pop()); FT.changed('redo'); return true; };
+  FT.undo = function () { if (!undo.length) return false; const e = undo.pop(); redo.push(entry()); restore(e); FT.changed('undo'); return true; };
+  FT.redo = function () { if (!redo.length) return false; const e = redo.pop(); undo.push(entry()); restore(e); FT.changed('redo'); return true; };
   FT.canUndo = () => undo.length > 0; FT.canRedo = () => redo.length > 0;
   FT.clearHistory = () => { undo = []; redo = []; };
   FT.setState = function (s) { FT.state = Object.assign(FT.blank(), s); FT.state.seq = Object.assign(FT.blank().seq, s.seq || {}); FT.migrate(FT.state); FT.clearHistory(); FT.changed('load'); };

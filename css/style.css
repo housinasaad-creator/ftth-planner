@@ -104,3 +104,17 @@ table.soc td{vertical-align:top;font-size:12.5px}table.soc .d{font-size:11.5px}
 #bDiag svg{max-height:230px}
 /* mixed Arabic + Latin text keeps the right word order */
 .d,.kv>span,.warnbox,table.soc td,.hint,#toast,.empty{unicode-bidi:plaintext}
+
+/* team work */
+#teamBox{position:fixed;top:52px;inset-inline-end:90px;z-index:60;width:320px;max-height:60vh;overflow:auto;background:#0e1117;border:1px solid var(--line);border-radius:12px;padding:6px;display:none;box-shadow:0 14px 40px rgba(0,0,0,.5);color:#eceff6;font-size:13px}
+#teamBox.on{display:block}
+.tm{display:flex;align-items:center;gap:8px;padding:7px 8px;border-radius:8px}
+.tm i{width:10px;height:10px;border-radius:50%;flex:0 0 auto}.tm span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.tm small{color:#9aa1b6;margin-inline-start:6px}
+.tm button{background:#171b25;color:#eceff6;border:1px solid var(--line);border-radius:7px;padding:4px 9px;cursor:pointer;font:inherit;font-size:12px}.tm button:hover{border-color:#ff6a3d}
+.tm.none{color:#9aa1b6;white-space:normal;line-height:1.5}
+.peermark{pointer-events:none;display:flex;align-items:flex-start;gap:3px;transition:transform .9s linear;z-index:5}
+.peermark i{width:11px;height:11px;border-radius:50%;background:var(--pc);border:2px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.4)}
+.peermark span{background:var(--pc);color:#fff;font-size:11px;font-weight:700;padding:1px 7px;border-radius:9px;white-space:nowrap;margin-top:7px}
+.peermark.away{opacity:.45}
+.tr.usr .udot{width:10px;height:10px;border-radius:50%;flex:0 0 auto;display:inline-block}.tr.usr small{color:#9aa1b6;margin-inline-start:4px}.tr.usr .uon{color:#22c55e;font-size:10px}
+.tr.usr .ugo{background:none;border:0;color:#ff8a62;cursor:pointer;font-size:15px;padding:0 4px}

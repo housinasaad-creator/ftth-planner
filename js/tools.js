@@ -201,6 +201,7 @@
   const metersPer100px = () => 156543.03 * Math.cos(map.getCenter().lat * Math.PI / 180) / Math.pow(2, map.getZoom()) * 100;
   T.tooHigh = () => metersPer100px() > T.SELECT_MAX_M;
   const tooHighToast = () => { if (Date.now() - (T._hiToast || 0) > 3000) { T._hiToast = Date.now(); U().toast(FT.lang === 'ar' ? 'قرّب أكتر لتحديد العناصر (السكيل أقل من 100 م)' : 'Zoom in to select elements (scale under 100 m)'); } };
+  T.isDragging = () => !!dragging;
   T.MOVE_MAX_M = 50; // metres under a 100 px scale bar; zoomed out further than this, elements cannot be dragged
   function onDown(e) {
     if (T.tool !== 'select' || e.originalEvent.button !== 0) return;

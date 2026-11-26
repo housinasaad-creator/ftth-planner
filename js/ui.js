@@ -117,10 +117,9 @@
   };
   UI.zoomSel = function () { const s = T().sel, S = FT.state; if (!s) return; if (s.kind === 'node' && S.nodes[s.id]) FT.map.flyTo(S.nodes[s.id].ll, 18.5); else if (s.kind === 'pipe' && S.pipes[s.id]) FT.map.fitBBox(FT.bboxOf(S.pipes[s.id].pts), FT.map.CABLE_MINZ + 0.1); else if (s.kind === 'cable' && S.cables[s.id]) FT.map.fitBBox(FT.bboxOf([].concat(...FT.cableSpans(S.cables[s.id]).map(x => x.pts))), FT.map.CABLE_MINZ + 0.1); else if (s.kind === 'bld') { const r = FT.map.buildingRing(s.id) || (S.bld[s.id] && S.bld[s.id].fp); if (r) FT.map.flyTo(FT.centroid(r), 19); } };
   UI.hideSel = function () { const s = T().sel; if (!s) return; T().hidden.add(s.id); UI.applyHidden(); UI.refreshTree(); };
-  UI.applyHidden = function () {
-    const ids = [...T().hidden], f = ids.length ? ['!', ['in', ['get', 'id'], ['literal', ids]]] : null, map = FT.map.map;
-    ['nodes', 'pipes', 'cables'].forEach(l => map.setFilter(l, f));
-  };
+  UI.applyHidden = function () { FT.map.renderNet('lod'); }; // hidden items are skipped when the map data is built
+  const folderIds = fid => Object.keys(FT.state.fmap || {}).filter(k => FT.state.fmap[k] === fid).map(k => k.slice(2));
+  UI.hideFolder = function (fid, hide) { folderIds(fid).forEach(id => hide ? T().hidden.add(id) : T().hidden.delete(id)); UI.applyHidden(); UI.refreshTree(); };
 
   // ---------------- layer tree ----------------
   const ROW_ICON = { node: n => '<img class="ico" data-ic="' + n.type + '">', pipe: p => '<span class="dot" style="background:' + (p.color || '#2aa8ff') + '"></span>', cable: c => '<span class="dot" style="background:' + (c.color || ((FT.CABLE_CAT.find(x => x.id === c.cat) || {}).group === 'Drop' ? '#d4ff4a' : (FT.CABLE_CAT.find(x => x.id === c.cat) || {}).group === 'Distribution' ? '#35e0c9' : '#b57bff')) + '"></span>', splice: () => '<img class="ico" data-ic="splice">' };
@@ -183,10 +182,15 @@
       vIndex[o.id] = vRows.length; vRows.push({ k: 'row', id: o.id, html: '<div class="tr%S%" draggable="true" data-key="' + key + '" data-k="' + kind + '" data-id="' + o.id + '" style="padding-inline-start:30px"><input type="checkbox"%C% data-vis="' + o.id + '">' + ROW_ICON[kind](o) + '<span class="nm">' + esc(nm) + '</span><span class="acts"><button data-act="up" title="' + t('layer_up') + '">▲</button><button data-act="down" title="' + t('layer_down') + '">▼</button><button data-act="lock" title="' + t('layer_lock') + '">%L%</button><button data-act="del" title="' + t('layer_del') + '">🗑</button><button data-act="more" title="' + t('layer_actions') + '">⋯</button></span></div>' }); };
     const raw = html => vRows.push({ k: 'raw', html });
     const grp = (id, title, items, kind, prefixKey) => { const open = !collapsed.has(id), its = items.filter(o => !inFolder(prefixKey + o.id)); if (!items.length) return; raw('<div class="tr fold" data-fold="' + id + '"><span class="tw">' + (open ? '▾' : '▸') + '</span><span class="nm">' + esc(title) + '</span><span class="ct">' + its.length + '</span></div>'); if (open) its.forEach(o => row(kind, o, prefixKey + o.id)); };
+    if (FT.sync && FT.sync.active) { // the team: who made what, each with a show/hide box for MY map
+      const people = FT.sync.userList(), open = !collapsed.has('users');
+      raw('<div class="tr fold" data-fold="users"><span class="tw">' + (open ? '▾' : '▸') + '</span><span class="nm">👥 ' + t('users') + '</span><span class="ct">' + people.length + '</span></div>');
+      if (open) people.forEach(p => raw('<div class="tr usr" data-user="' + p.id + '" style="padding-inline-start:30px"><input type="checkbox" data-uvis="' + p.id + '" title="' + t('user_vis') + '"' + (p.hidden ? '' : ' checked') + '><i class="udot" style="background:' + p.color + '"></i><span class="nm">' + esc(p.old ? t('user_before') : p.name || t('user_unknown')) + (p.me ? ' <small>' + t('user_me') + '</small>' : '') + '</span>' + (p.peer ? '<span class="uon" title="' + t('user_online') + '">●</span>' : '') + '<span class="ct">' + p.count + '</span>' + (p.peer ? '<button class="ugo" data-ugo="' + p.peer + '" title="' + t('user_go') + '">⌖</button>' : '') + '</div>'));
+    }
     raw('<div class="tr fold" data-fold="root"><span class="tw">' + (collapsed.has('root') ? '▸' : '▾') + '</span><span class="nm">' + t('physical') + '</span></div>');
     if (!collapsed.has('root')) {
       Object.entries(S.folders || {}).forEach(([fid, f]) => { const open = !collapsed.has(fid); const items = []; lst.nodes.forEach(o => fmap['n:' + o.id] === fid && items.push(['node', o, 'n:' + o.id])); lst.pipes.forEach(o => fmap['p:' + o.id] === fid && items.push(['pipe', o, 'p:' + o.id])); lst.cables.forEach(o => fmap['c:' + o.id] === fid && items.push(['cable', o, 'c:' + o.id]));
-        raw('<div class="tr fold" data-fold="' + fid + '" data-drop="' + fid + '" style="padding-inline-start:16px"><span class="tw">' + (open ? '▾' : '▸') + '</span><span class="nm">📁 ' + esc(f.name) + '</span><span class="ct">' + items.length + '</span><span class="acts"><button data-act="fren" data-fid="' + fid + '">✎</button><button data-act="fdel" data-fid="' + fid + '">🗑</button></span></div>'); if (open) items.forEach(x => row(x[0], x[1], x[2])); });
+        raw('<div class="tr fold" data-fold="' + fid + '" data-drop="' + fid + '" style="padding-inline-start:16px"><span class="tw">' + (open ? '▾' : '▸') + '</span><input type="checkbox" data-fvis="' + fid + '" title="' + t('folder_vis') + '"' + (items.length && items.every(x => T().hidden.has(x[1].id)) ? '' : ' checked') + '><span class="nm">📁 ' + esc(f.name) + '</span><span class="ct">' + items.length + '</span><span class="acts"><button data-act="fren" data-fid="' + fid + '">✎</button><button data-act="fdel" data-fid="' + fid + '">🗑</button></span></div>'); if (open) items.forEach(x => row(x[0], x[1], x[2])); });
       NODE_ORDER.forEach(tp => grp('nodes:' + tp, t('tg_' + tp), lst.nodes.filter(n => n.type === tp), 'node', 'n:'));
       grp('pipes', t('pipes'), lst.pipes, 'pipe', 'p:'); grp('cables', t('cables'), lst.cables, 'cable', 'c:'); grp('splices', t('splices'), lst.splices, 'splice', 's:');
       const ig = importsGroup(); if (ig) raw(ig);
@@ -203,6 +207,7 @@
     let tick = 0; el.addEventListener('scroll', () => { if (!vOn || tick) return; tick = requestAnimationFrame(() => { tick = 0; const st = el.scrollTop, vh = el.clientHeight || 600; if (Math.floor(st / VH) - 8 < vFrom && vFrom > 0 || Math.ceil((st + vh) / VH) + 8 > vTo && vTo < vRows.length) UI.treeRender(); }); });
     el.addEventListener('click', e => {
       const tg = e.target, btn = tg.closest('button'), r = tg.closest('.tr'); if (!r) return;
+      if (btn && btn.dataset.ugo) { e.stopPropagation(); FT.sync.goTo(btn.dataset.ugo); return; }
       if (btn && btn.dataset.implock) { e.stopPropagation(); FT.imp.setLocked(btn.dataset.implock, !FT.imp.isLocked(btn.dataset.implock)); return; }
       if (btn && btn.dataset.impdel) { e.stopPropagation(); FT.commit(); delete S().imports[btn.dataset.impdel]; FT.imp.unlocked.delete(btn.dataset.impdel); FT.changed('import'); return; }
       if (btn && btn.dataset.act) { e.stopPropagation(); const a = btn.dataset.act, id = r.dataset.id, k = r.dataset.k, key = r.dataset.key;
@@ -222,6 +227,8 @@
       else if (r.dataset.imp) { const g = S().imports[r.dataset.imp]; if (g) FT.map.fitBBox(FT.bboxOf([].concat(...g.features.slice(0, 2000).map(f => f.geometry.type === 'Point' ? [f.geometry.coordinates] : f.geometry.type === 'LineString' ? f.geometry.coordinates : f.geometry.coordinates[0])))); }
     });
     el.addEventListener('change', e => { const c = e.target;
+      if (c.dataset.uvis) { FT.sync.setUserHidden(c.dataset.uvis, !c.checked); return; }
+      if (c.dataset.fvis) { UI.hideFolder(c.dataset.fvis, !c.checked); return; }
       if (c.dataset.vis) { c.checked ? T().hidden.delete(c.dataset.vis) : T().hidden.add(c.dataset.vis); UI.applyHidden(); }
       else if (c.dataset.impvis) { c.checked ? T().hidden.delete(c.dataset.impvis) : T().hidden.add(c.dataset.impvis); FT.imp.render(); } });
     el.addEventListener('dragstart', e => { const r = e.target.closest && e.target.closest('.tr[data-key]'); if (!r) return; dragKey = r.dataset.key; e.dataTransfer.setData('text', dragKey); e.dataTransfer.effectAllowed = 'move'; r.classList.add('dragging'); });
