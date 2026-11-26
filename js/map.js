@@ -74,7 +74,7 @@
     // buildings
     map.addSource('bld', { type: 'geojson', data: EMPTY, promoteId: 'id' });
     map.addLayer({ id: 'bld-3d', type: 'fill-extrusion', source: 'bld', minzoom: 14, paint: {
-      'fill-extrusion-color': ['case', ['boolean', ['feature-state', 'sel'], false], '#ff8a62', ['>', ['get', 'num'], 0], '#f2b28c', ['==', ['get', 'st'], 1], '#7ad7ff', '#d9d4cb'],
+      'fill-extrusion-color': ['case', ['boolean', ['feature-state', 'sel'], false], '#ff8a62', ['boolean', ['feature-state', 'hover'], false], '#ffc4a3', ['>', ['get', 'num'], 0], '#f2b28c', ['==', ['get', 'st'], 1], '#7ad7ff', '#d9d4cb'],
       'fill-extrusion-height': ['get', 'eh'], 'fill-extrusion-base': 0, 'fill-extrusion-opacity': 0.94, 'fill-extrusion-vertical-gradient': true } }, firstSymbol);
     map.addLayer({ id: 'bld-num', type: 'symbol', source: 'bld', minzoom: 15.5, filter: ['>', ['get', 'num'], 0],
       layout: { 'text-field': ['get', 'lab'], 'text-font': ['Noto Sans Bold'], 'text-size': ['interpolate', ['linear'], ['zoom'], 15.5, 10, 19, 18], 'text-allow-overlap': true, 'text-pitch-alignment': 'viewport' },
@@ -86,9 +86,9 @@
     map.addLayer({ id: 'hov-line', type: 'line', source: 'hov', paint: { 'line-color': '#ff6a3d', 'line-width': 2.2 } });
     // network
     ['pipes', 'cables', 'nodes', 'draw', 'sel', 'wd', 'wl', 'imp', 'impv', 'bh'].forEach(s => map.addSource(s, { type: 'geojson', data: EMPTY, promoteId: 'id' }));
-    map.addLayer({ id: 'pipes-case', type: 'line', source: 'pipes', minzoom: 15, paint: { 'line-color': '#07090d', 'line-width': ['interpolate', ['linear'], ['zoom'], 10, 3, 18, 8], 'line-opacity': 0.55 } });
-    map.addLayer({ id: 'pipes', type: 'line', source: 'pipes', minzoom: 15, layout: { 'line-sort-key': ['coalesce', ['get', 'z'], 0] }, paint: { 'line-color': ['coalesce', ['get', 'color'], '#2aa8ff'], 'line-width': ['interpolate', ['linear'], ['zoom'], 10, 1.6, 18, 5], 'line-dasharray': ['case', ['==', ['get', 'aerial'], 1], ['literal', [2, 1.5]], ['literal', [1, 0]]] } });
-    map.addLayer({ id: 'cables', type: 'line', source: 'cables', layout: { 'line-cap': 'round', 'line-join': 'round', 'line-sort-key': ['coalesce', ['get', 'z'], 0] }, paint: { 'line-color': ['get', 'color'], 'line-width': ['interpolate', ['linear'], ['zoom'], 10, 1.4, 18, 3.6], 'line-offset': ['interpolate', ['linear'], ['zoom'], 10, 0, 18, 4] } });
+    map.addLayer({ id: 'pipes-case', type: 'line', source: 'pipes', paint: { 'line-color': '#07090d', 'line-width': ['interpolate', ['linear'], ['zoom'], 10, 3, 18, 8], 'line-opacity': 0.55 } });
+    map.addLayer({ id: 'pipes', type: 'line', source: 'pipes', layout: { 'line-sort-key': ['coalesce', ['get', 'z'], 0] }, paint: { 'line-color': ['coalesce', ['get', 'color'], '#2aa8ff'], 'line-width': ['interpolate', ['linear'], ['zoom'], 10, 1.6, 18, 5], 'line-dasharray': ['case', ['==', ['get', 'aerial'], 1], ['literal', [2, 1.5]], ['literal', [1, 0]]] } });
+    map.addLayer({ id: 'cables', type: 'line', source: 'cables', minzoom: 17.5, layout: { 'line-cap': 'round', 'line-join': 'round', 'line-sort-key': ['coalesce', ['get', 'z'], 0] }, paint: { 'line-color': ['get', 'color'], 'line-width': ['interpolate', ['linear'], ['zoom'], 10, 1.4, 18, 3.6], 'line-offset': ['interpolate', ['linear'], ['zoom'], 10, 0, 18, 4] } });
     map.addLayer({ id: 'imp-fill', type: 'fill', source: 'imp', filter: ['==', ['geometry-type'], 'Polygon'], paint: { 'fill-color': '#3bd18b', 'fill-opacity': 0.18 } });
     map.addLayer({ id: 'imp-line', type: 'line', source: 'imp', filter: ['any', ['==', ['geometry-type'], 'LineString'], ['==', ['geometry-type'], 'Polygon']], paint: { 'line-color': '#7ad7ff', 'line-width': 2 } });
     map.addLayer({ id: 'imp-pt', type: 'circle', source: 'imp', filter: ['==', ['geometry-type'], 'Point'], paint: { 'circle-radius': 5, 'circle-color': '#7ad7ff', 'circle-stroke-color': '#07090d', 'circle-stroke-width': 1.5 } });
@@ -103,14 +103,17 @@
     map.addLayer({ id: 'nodes', type: 'symbol', source: 'nodes', layout: { 'symbol-sort-key': ['coalesce', ['get', 'z'], 0], 'icon-image': ['concat', 'i-', ['get', 'type']], 'icon-size': ['interpolate', ['linear'], ['zoom'], 9, 0.24, 14, 0.36, 17, 0.46, 19, 0.58], 'icon-allow-overlap': true, 'icon-ignore-placement': true,
       'text-field': ['step', ['zoom'], '', 15.5, ['coalesce', ['get', 'lab'], ['get', 'name']]], 'text-font': ['Noto Sans Bold'], 'text-size': 10, 'text-offset': [0, 1.3], 'text-optional': true }, paint: { 'text-color': '#07090d', 'text-halo-color': '#ffffff', 'text-halo-width': 1.6 } });
     map.addLayer({ id: 'nodes-sel', type: 'circle', source: 'sel', filter: ['==', ['geometry-type'], 'Point'], paint: { 'circle-radius': 13, 'circle-color': 'rgba(255,255,255,0)', 'circle-stroke-color': '#ffffff', 'circle-stroke-width': 3 } });
-    map.addLayer({ id: 'impv-pt', type: 'circle', source: 'impv', paint: { 'circle-radius': 5.5, 'circle-color': '#ffffff', 'circle-stroke-color': '#ff6a3d', 'circle-stroke-width': 2 } });
-    map.addLayer({ id: 'bh-box', type: 'line', source: 'bh', filter: ['==', ['geometry-type'], 'LineString'], paint: { 'line-color': '#ffffff', 'line-width': 1.6, 'line-dasharray': [2, 2] } });
-    map.addLayer({ id: 'bh-vtx', type: 'circle', source: 'bh', filter: ['==', ['get', 'k'], 'vtx'], paint: { 'circle-radius': 4.5, 'circle-color': '#ffffff', 'circle-stroke-color': '#07090d', 'circle-stroke-width': 1.5 } });
-    map.addLayer({ id: 'bh-pt', type: 'symbol', source: 'bh', filter: ['any', ['==', ['get', 'k'], 'edge'], ['==', ['get', 'k'], 'move']], layout: { 'icon-image': ['concat', 'i-', ['get', 'k'], 'h'], 'icon-size': 0.5, 'icon-rotate': ['coalesce', ['get', 'rot'], 0], 'icon-rotation-alignment': 'map', 'icon-allow-overlap': true, 'icon-ignore-placement': true } });
+    map.addLayer({ id: 'impv-pt', type: 'circle', source: 'impv', minzoom: 17, paint: { 'circle-radius': 5.5, 'circle-color': '#ffffff', 'circle-stroke-color': '#ff6a3d', 'circle-stroke-width': 2 } });
+    map.addLayer({ id: 'bh-box', type: 'line', source: 'bh', minzoom: 17, filter: ['==', ['geometry-type'], 'LineString'], paint: { 'line-color': '#ffffff', 'line-width': 1.6, 'line-dasharray': [2, 2] } });
+    map.addLayer({ id: 'bh-vtx', type: 'circle', source: 'bh', minzoom: 17, filter: ['==', ['get', 'k'], 'vtx'], paint: { 'circle-radius': 4.5, 'circle-color': '#ffffff', 'circle-stroke-color': '#07090d', 'circle-stroke-width': 1.5 } });
+    map.addLayer({ id: 'bh-pt', type: 'symbol', source: 'bh', minzoom: 17, filter: ['any', ['==', ['get', 'k'], 'edge'], ['==', ['get', 'k'], 'move']], layout: { 'icon-image': ['concat', 'i-', ['get', 'k'], 'h'], 'icon-size': 0.5, 'icon-rotate': ['coalesce', ['get', 'rot'], 0], 'icon-rotation-alignment': 'map', 'icon-allow-overlap': true, 'icon-ignore-placement': true } });
     map.on('moveend', M.scheduleBuildings); map.on('zoomend', M.scheduleBuildings);
     M.ready = true; M.scheduleBuildings(); M.renderNet();
     FT.onChange(why => M.renderNet(why));
-    map.on('zoomend', () => { if (M._pipesDirty && !M.netHidden && map.getZoom() >= 15) M.renderNet(['lod']); });
+    map.on('moveend', () => { // moved/zoomed out of the area that was built, or the cables just became visible: rebuild once
+      if (M.netHidden || !M._builtBB) return; const b = map.getBounds(), bb = M._builtBB;
+      if (b.getWest() < bb[0] || b.getEast() > bb[2] || b.getSouth() < bb[1] || b.getNorth() > bb[3] || (M._cablesDirty && map.getZoom() >= M.CABLE_MINZ)) M.renderNet(['lod']);
+    });
     return map;
   };
   M.firstBaseLayerAbove = () => { const l = map.getStyle().layers.find(x => x.type === 'line' || x.type === 'symbol'); return l && l.id; };
@@ -123,8 +126,14 @@
     if (!v) { hovId = null; map.getSource('hov').setData(EMPTY); }
   };
   M.setBldHidden = function (v) { M.hideBld = !!v; M.applyBldHidden(); };
-  M.hover = function (ll) {
-    if (!M.bldHiddenNow()) return; const id = M.buildingAt(ll); if (id === hovId) return; hovId = id;
+  let hoverB = null; // hover colour of a house: a feature-state (no data reload), only from zoom 15.5
+  const hoverSet = id => { if (id === hoverB) return; if (hoverB != null) map.setFeatureState({ source: 'bld', id: hoverB }, { hover: false }); hoverB = id; if (id != null) map.setFeatureState({ source: 'bld', id }, { hover: true }); };
+  M.hover = function (ll, pt) {
+    if (!M.bldHiddenNow()) { // normal map: tint the house under the mouse
+      if (!pt || map.getZoom() < 17 || !map.getLayer('bld-3d')) { hoverSet(null); return; }
+      const f = map.queryRenderedFeatures([pt.x, pt.y], { layers: ['bld-3d'] }); hoverSet(f.length ? f[0].properties.id : null); return;
+    }
+    hoverSet(null); const id = M.buildingAt(ll); if (id === hovId) return; hovId = id;
     map.getSource('hov').setData(id ? { type: 'FeatureCollection', features: [{ type: 'Feature', properties: {}, geometry: { type: 'Polygon', coordinates: [M.buildingRing(id)] } }] } : EMPTY);
     map.getCanvas().style.cursor = id ? 'pointer' : '';
   };
@@ -216,15 +225,20 @@
     (M._why = M._why || []).push(why); if (M._raf) return;
     M._raf = (window.requestAnimationFrame || (f => setTimeout(f, 16)))(() => { M._raf = 0; const w = M._why; M._why = []; M.renderNetNow(w); });
   };
+  M.CABLE_MINZ = 17.5; // the cable layer shows from this zoom: 100 px of scale bar <= 70 m. Cables run inside the pipes, so the blue pipe line still shows the route when zoomed out
+  M.viewBB = function () { const b = map.getBounds(), w = b.getEast() - b.getWest(), h = b.getNorth() - b.getSouth(); return [b.getWest() - w, b.getSouth() - h, b.getEast() + w, b.getNorth() + h]; }; // the view plus one screen on every side
+  const inBB = (p, bb) => p[0] >= bb[0] && p[0] <= bb[2] && p[1] >= bb[1] && p[1] <= bb[3];
+  const lineIn = (pts, bb) => { let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9; for (let i = 0; i < pts.length; i++) { const q = pts[i]; if (q[0] < x0) x0 = q[0]; if (q[0] > x1) x1 = q[0]; if (q[1] < y0) y0 = q[1]; if (q[1] > y1) y1 = q[1]; } return !(x1 < bb[0] || x0 > bb[2] || y1 < bb[1] || y0 > bb[3]); };
   M.renderNetNow = function (why) {
     if (!M.ready) return; const S = FT.state, needBld = !why || !why.length || why.some(x => !NO_BLD.has(x));
     // level of detail: pipes are drawn from zoom 15 only, and a hidden network is not rebuilt at all (it refreshes the moment it shows again)
-    if (M.netHidden) { M._pipesDirty = M._netDirty = true; if (FT.wl) FT.wl.render(); if (FT.imp) FT.imp.render(); if (needBld && M.rebuildBuildingData && M.bldFeats) M.rebuildBuildingData(); return; }
-    const zN = FT.zOrder('nodes'), zP = FT.zOrder('pipes'), zC = FT.zOrder('cables'), showPipes = map.getZoom() >= 15;
+    if (M.netHidden) { M._cablesDirty = M._netDirty = true; if (FT.wl) FT.wl.render(); if (FT.imp) FT.imp.render(); if (needBld && M.rebuildBuildingData && M.bldFeats) M.rebuildBuildingData(); return; }
+    const zN = FT.zOrder('nodes'), zP = FT.zOrder('pipes'), zC = FT.zOrder('cables'), showCables = map.getZoom() >= M.CABLE_MINZ, bb = M.viewBB(); M._builtBB = bb;
     M._netDirty = false;
-    map.getSource('nodes').setData({ type: 'FeatureCollection', features: Object.values(S.nodes).map(n => ({ type: 'Feature', id: n.id, properties: { id: n.id, type: n.type, name: n.name, lab: n.name.replace(/^(F\d+)-(PS\d+)-(P\d+)-D\d+-FDB\d+$/, '$1·$2·$3'), z: zN[n.id] || 0 }, geometry: { type: 'Point', coordinates: n.ll } })).concat(Object.values(S.splices).map(sp => { const n = S.nodes[sp.node]; return n ? { type: 'Feature', id: sp.id, properties: { id: sp.id, type: 'splice', name: sp.label || '' }, geometry: { type: 'Point', coordinates: [n.ll[0] + 0.00003, n.ll[1] + 0.00003] } } : null; }).filter(Boolean)) });
-    if (showPipes) { M._pipesDirty = false; map.getSource('pipes').setData({ type: 'FeatureCollection', features: Object.values(S.pipes).map(p => ({ type: 'Feature', id: p.id, properties: { id: p.id, z: zP[p.id] || 0, color: p.color || null, aerial: p.ptype === 'aerial' ? 1 : 0 }, geometry: { type: 'LineString', coordinates: p.pts } })) }); } else M._pipesDirty = true;
-    map.getSource('cables').setData({ type: 'FeatureCollection', features: Object.values(S.cables).map(c => { const pts = [].concat(...FT.cableSpans(c).map((s, i) => i ? s.pts.slice(1) : s.pts)); const g = (FT.CABLE_CAT.find(x => x.id === c.cat) || {}).group || 'Feeder'; return { type: 'Feature', id: c.id, properties: { id: c.id, z: zC[c.id] || 0, color: c.color || CABLE_COL[g] }, geometry: { type: 'LineString', coordinates: pts.length > 1 ? pts : (c.pts || []) } }; }) });
+    const nodeList = Object.values(S.nodes).filter(n => inBB(n.ll, bb)), nodeIn = new Set(nodeList.map(n => n.id));
+    map.getSource('nodes').setData({ type: 'FeatureCollection', features: nodeList.map(n => ({ type: 'Feature', id: n.id, properties: { id: n.id, type: n.type, name: n.name, lab: n.name.replace(/^(F\d+)-(PS\d+)-(P\d+)-D\d+-FDB\d+$/, '$1·$2·$3'), z: zN[n.id] || 0 }, geometry: { type: 'Point', coordinates: n.ll } })).concat(Object.values(S.splices).filter(sp => nodeIn.has(sp.node)).map(sp => { const n = S.nodes[sp.node]; return n ? { type: 'Feature', id: sp.id, properties: { id: sp.id, type: 'splice', name: sp.label || '' }, geometry: { type: 'Point', coordinates: [n.ll[0] + 0.00003, n.ll[1] + 0.00003] } } : null; }).filter(Boolean)) });
+    map.getSource('pipes').setData({ type: 'FeatureCollection', features: Object.values(S.pipes).filter(p => lineIn(p.pts, bb)).map(p => ({ type: 'Feature', id: p.id, properties: { id: p.id, z: zP[p.id] || 0, color: p.color || null, aerial: p.ptype === 'aerial' ? 1 : 0 }, geometry: { type: 'LineString', coordinates: p.pts } })) });
+    if (showCables) { M._cablesDirty = false; map.getSource('cables').setData({ type: 'FeatureCollection', features: Object.values(S.cables).filter(c => (c.pts && lineIn(c.pts, bb)) || [c.a, c.b].some(i => S.nodes[i] && inBB(S.nodes[i].ll, bb))).map(c => { const pts = [].concat(...FT.cableSpans(c).map((s, i) => i ? s.pts.slice(1) : s.pts)); const g = (FT.CABLE_CAT.find(x => x.id === c.cat) || {}).group || 'Feeder'; return { type: 'Feature', id: c.id, properties: { id: c.id, z: zC[c.id] || 0, color: c.color || CABLE_COL[g] }, geometry: { type: 'LineString', coordinates: pts.length > 1 ? pts : (c.pts || []) } }; }) }); } else M._cablesDirty = true;
     if (FT.wl) FT.wl.render();
     if (FT.imp) FT.imp.render();
     if (needBld && M.rebuildBuildingData && M.bldFeats) M.rebuildBuildingData();
@@ -247,5 +261,9 @@
   M.setImpVerts = function (features) { M.impvData = features || []; if (M.ready) map.getSource('impv').setData({ type: 'FeatureCollection', features: features || [] }); };
   M.setDraw = function (features) { map.getSource('draw').setData({ type: 'FeatureCollection', features: features || [] }); };
   M.flyTo = (ll, z) => map.flyTo({ center: ll, zoom: z || Math.max(map.getZoom(), 17), duration: 700 });
-  M.fitBBox = bb => map.fitBounds([[bb[0], bb[1]], [bb[2], bb[3]]], { padding: 80, maxZoom: 18.5, duration: 700 });
+  M.fitBBox = (bb, minZ) => {
+    const o = { padding: 80, maxZoom: 18.5, duration: 700 };
+    if (minZ) { const cam = map.cameraForBounds([[bb[0], bb[1]], [bb[2], bb[3]]], { padding: 80, maxZoom: 18.5 }); if (cam && cam.zoom < minZ) { map.flyTo({ center: [(bb[0] + bb[2]) / 2, (bb[1] + bb[3]) / 2], zoom: minZ, duration: 700 }); return; } }
+    map.fitBounds([[bb[0], bb[1]], [bb[2], bb[3]]], o);
+  };
 })(window);

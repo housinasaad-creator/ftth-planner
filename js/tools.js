@@ -133,6 +133,7 @@
       if (lay('bh-pt') && map.queryRenderedFeatures(bx, { layers: ['bh-pt', 'bh-vtx'] }).length) return; // a click on a handle never changes the selection
       const h = hit(e); T.cycle++;
       if (!h) { if (T.sel || T.multi) T.select(null); return; }
+      if (T.tooHigh()) { tooHighToast(); return; }
       if (e.originalEvent.shiftKey && h.kind === 'bld') { T.toggleBuilding(h.id); return; }
       if (e.originalEvent.shiftKey && (h.kind === 'node' || h.kind === 'pipe' || h.kind === 'cable')) { T.toggleMulti(h); return; }
       T.select(h.kind, h.id); return;
@@ -169,7 +170,7 @@
   function onMove(e) {
     const d = T.draw; T.hoverNode = null;
     if (dragging) return dragMove(e);
-    if (FT.map.bldHiddenNow()) FT.map.hover(ll(e));
+    FT.map.hover(ll(e), e.point);
     if (!d) { if (T.tool === 'select') { const h = hit(e); map.getCanvas().style.cursor = h ? 'pointer' : ''; } if (T.tool === 'pipe' || T.tool === 'cable' || T.tool === 'route' || T.tool === 'reconnect' || T.tool === 'splice') { const n = nodeNear(e.point, 18); map.getCanvas().style.cursor = n ? 'cell' : 'crosshair'; } return; }
     const p = ll(e); let cur = p;
     if (d.kind === 'pipe' || d.kind === 'cable') { const n = nodeNear(e.point, 18); if (n) { cur = n.ll; T.hoverNode = n; } }
@@ -190,16 +191,21 @@
     if (T.draw) { e.preventDefault && e.preventDefault(); T.finish(); return; }
     const h = hit(e), extra = [];
     if (map.getLayer('impv-pt')) { const iv = map.queryRenderedFeatures([[e.point.x - 8, e.point.y - 8], [e.point.x + 8, e.point.y + 8]], { layers: ['impv-pt'] }); if (iv.length) { const pr = iv[0].properties; extra.push([FT.lang === 'ar' ? 'حذف هذه النقطة' : 'Delete this point', () => FT.imp.deleteVertex(pr)]); } }
+    if (h && T.tooHigh()) { tooHighToast(); return; }
     if (h && !(h.kind === 'bld' && T.bsel.has(h.id))) { T.select(h.kind, h.id); }
     U().ctxMenu(e.originalEvent.clientX, e.originalEvent.clientY, h, ll(e), extra);
   }
 
   // node dragging
+  T.SELECT_MAX_M = 100; // metres under a 100 px scale bar; zoomed out further than this nothing drawn can be selected or edited
+  const metersPer100px = () => 156543.03 * Math.cos(map.getCenter().lat * Math.PI / 180) / Math.pow(2, map.getZoom()) * 100;
+  T.tooHigh = () => metersPer100px() > T.SELECT_MAX_M;
+  const tooHighToast = () => { if (Date.now() - (T._hiToast || 0) > 3000) { T._hiToast = Date.now(); U().toast(FT.lang === 'ar' ? 'قرّب أكتر لتحديد العناصر (السكيل أقل من 100 م)' : 'Zoom in to select elements (scale under 100 m)'); } };
   T.MOVE_MAX_M = 50; // metres under a 100 px scale bar; zoomed out further than this, elements cannot be dragged
   function onDown(e) {
     if (T.tool !== 'select' || e.originalEvent.button !== 0) return;
     const bx = [[e.point.x - 8, e.point.y - 8], [e.point.x + 8, e.point.y + 8]];
-    if (!(FT.store && FT.store.mode === 'view')) {
+    if (!(FT.store && FT.store.mode === 'view') && !T.tooHigh()) {
       if (map.getLayer('bh-pt') && T.sel && T.sel.kind === 'bld') { // building handles: stretch / move / single corner
         const hb = map.queryRenderedFeatures(bx, { layers: ['bh-pt', 'bh-vtx'] });
         if (hb.length) { const sc = x => { const q = map.project(x.geometry.coordinates); return Math.hypot(q.x - e.point.x, q.y - e.point.y) + (x.properties.k === 'move' ? 6 : 0); }; const f = hb.slice().sort((p1, p2) => sc(p1) - sc(p2))[0], k = f.properties.k; /* nearest handle to the cursor: icons overlap on small buildings */ if (FT.bedit.begin(T.sel.id, k, k === 'vtx' ? f.properties.i : f.properties.d, ll(e))) { dragging = { bh: true, moved: false, start: ll(e) }; map.dragPan.disable(); return; } }

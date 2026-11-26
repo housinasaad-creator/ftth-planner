@@ -108,7 +108,14 @@
   UI.toggleLeft = () => { const l = $('#left'); l.style.display = l.style.display === 'none' ? '' : 'none'; setTimeout(() => FT.map.map.resize(), 50); UI.edgeBtns(); };
   UI.toggleRight = () => { $('#right').classList.toggle('hide'); UI.edgeBtns(); };
   UI.fitAll = function () { const pts = []; Object.values(FT.state.nodes).forEach(n => pts.push(n.ll)); Object.values(FT.state.pipes).forEach(p => p.pts.forEach(q => pts.push(q))); if (pts.length > 1) FT.map.fitBBox(FT.bboxOf(pts)); else if (pts.length === 1) FT.map.flyTo(pts[0], 17); else FT.map.flyTo([36.7137, 34.7324], 14.5); };
-  UI.zoomSel = function () { const s = T().sel, S = FT.state; if (!s) return; if (s.kind === 'node' && S.nodes[s.id]) FT.map.flyTo(S.nodes[s.id].ll, 18.5); else if (s.kind === 'pipe' && S.pipes[s.id]) FT.map.fitBBox(FT.bboxOf(S.pipes[s.id].pts)); else if (s.kind === 'cable' && S.cables[s.id]) FT.map.fitBBox(FT.bboxOf([].concat(...FT.cableSpans(S.cables[s.id]).map(x => x.pts)))); else if (s.kind === 'bld') { const r = FT.map.buildingRing(s.id) || (S.bld[s.id] && S.bld[s.id].fp); if (r) FT.map.flyTo(FT.centroid(r), 19); } };
+  // clicking a row in the tree: if the element is off screen or too small to see at this height, fly to it and zoom so that it shows
+  UI.revealSel = function () {
+    const s = T().sel, S = FT.state, m = FT.map.map; if (!s || !m) return; const z = m.getZoom(), b = m.getBounds(); let pts = [];
+    if (s.kind === 'node' && S.nodes[s.id]) pts = [S.nodes[s.id].ll]; else if (s.kind === 'pipe' && S.pipes[s.id]) pts = S.pipes[s.id].pts; else if (s.kind === 'cable' && S.cables[s.id]) pts = [].concat(...FT.cableSpans(S.cables[s.id]).map(x => x.pts)); else if (s.kind === 'bld') { const r = FT.map.buildingRing(s.id) || (S.bld[s.id] && S.bld[s.id].fp); if (r) pts = [FT.centroid(r)]; }
+    if (!pts.length) return; const inView = pts.some(p => p[0] >= b.getWest() && p[0] <= b.getEast() && p[1] >= b.getSouth() && p[1] <= b.getNorth());
+    if (!inView || z < FT.map.CABLE_MINZ) UI.zoomSel();
+  };
+  UI.zoomSel = function () { const s = T().sel, S = FT.state; if (!s) return; if (s.kind === 'node' && S.nodes[s.id]) FT.map.flyTo(S.nodes[s.id].ll, 18.5); else if (s.kind === 'pipe' && S.pipes[s.id]) FT.map.fitBBox(FT.bboxOf(S.pipes[s.id].pts), FT.map.CABLE_MINZ + 0.1); else if (s.kind === 'cable' && S.cables[s.id]) FT.map.fitBBox(FT.bboxOf([].concat(...FT.cableSpans(S.cables[s.id]).map(x => x.pts))), FT.map.CABLE_MINZ + 0.1); else if (s.kind === 'bld') { const r = FT.map.buildingRing(s.id) || (S.bld[s.id] && S.bld[s.id].fp); if (r) FT.map.flyTo(FT.centroid(r), 19); } };
   UI.hideSel = function () { const s = T().sel; if (!s) return; T().hidden.add(s.id); UI.applyHidden(); UI.refreshTree(); };
   UI.applyHidden = function () {
     const ids = [...T().hidden], f = ids.length ? ['!', ['in', ['get', 'id'], ['literal', ids]]] : null, map = FT.map.map;
@@ -207,7 +214,7 @@
         return; }
       if (tg.type === 'checkbox') return;
       if (r.dataset.fold) { const id = r.dataset.fold; collapsed.has(id) ? collapsed.delete(id) : collapsed.add(id); UI.refreshTree(); return; }
-      if (r.dataset.id) T().select(r.dataset.k, r.dataset.id);
+      if (r.dataset.id) { T().select(r.dataset.k, r.dataset.id); UI.revealSel(); }
     });
     el.addEventListener('dblclick', e => {
       const r = e.target.closest('.tr'); if (!r || e.target.closest('.acts')) return;
