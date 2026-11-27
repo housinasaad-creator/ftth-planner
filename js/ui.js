@@ -520,7 +520,7 @@
   // ---------------- static wiring / boot ----------------
   UI.applyLang = function () {
     UI.themeButtons(); document.documentElement.lang = FT.lang; $('#brand').title = t('projects'); $('#layersTitle').textContent = t('layers'); $('#lsearch').placeholder = t('layers_search');
-    $('#bUndo').title = t('undo'); $('#bRedo').title = t('redo'); $('#bLang').textContent = FT.lang === 'ar' ? 'EN' : 'عربي'; $('#bShare').textContent = t('share'); UI.priceBtn(); if (FT.auth) FT.auth.paint(); else $('#bUser').textContent = t('signin');
+    $('#bUndo').title = t('undo'); $('#bRedo').title = t('redo'); $('#bLang').textContent = FT.lang === 'ar' ? 'EN' : 'عربي'; $('#bShare').textContent = t('share'); UI.priceBtn();
     $('#bNewFolder').title = t('new_folder'); $('#bCollapse').title = t('collapse'); $('#bLockAll').title = t('lock_all');
     $$('.tabs button[data-tab]').forEach(b => b.textContent = t('tab_' + (b.dataset.tab === 'tool' ? 'tool' : b.dataset.tab === 'props' ? 'props' : 'analysis')));
     $('#basemap .cap').textContent = t('basemap'); $('#basemap .bm').innerHTML = [['map', 'b_map'], ['3d', 'b_3d'], ['sat', 'b_sat']].map(([k, l]) => '<button data-b="' + k + '" class="' + ((FT.map.base || 'map') === k ? 'on' : '') + '">' + t(l) + '</button>').join(''); $('#basemap .bm').innerHTML += '<button id="bHideNet" class="' + (FT.map.netHidden ? 'on' : '') + '" title="' + t('b_hidenet') + '">👁 ' + t('b_hidenet') + '</button><button id="bHideHouses" class="' + (FT.map.hideHouses ? 'on' : '') + '" title="' + t('b_hidehouses') + '">👁 ' + t('b_hidehouses') + '</button>'; { $('#basemap .bm').innerHTML += '<button id="bHideBld" class="' + (FT.map.hideBld ? 'on' : '') + '" title="' + t('b_hide') + '">👁 ' + t('b_hide') + '</button>'; $('#bHideBld').onclick = () => { FT.map.setBldHidden(!FT.map.hideBld); UI.applyLang(); }; }
@@ -537,7 +537,7 @@
     document.body.classList.add('nop'); UI.applyLang(); await FT.map.init('map'); FT.T.init(); UI.applyLang();
     $('#brand').onclick = () => UI.openProjects(); $('#projName').onclick = () => UI.openProjects();
     $('#bUndo').onclick = () => FT.undo(); $('#bRedo').onclick = () => FT.redo(); $('#bLang').onclick = () => { FT.setLang(FT.lang === 'ar' ? 'en' : 'ar'); UI.applyLang(); UI.buildTabs((FT.state.meta && FT.state.meta.type) || 'gpon'); UI.buildToolbar(); };
-    $('#bShare').onclick = UI.openShare; $('#bPrices').onclick = () => UI.openPrices(); $('#bUser').onclick = () => FT.auth.open();
+    $('#bShare').onclick = UI.openShare; $('#bPrices').onclick = () => UI.openPrices();
     $('#showLeft').onclick = UI.toggleLeft; $('#showRight').onclick = UI.toggleRight; $('#bLayersX').onclick = UI.toggleLeft; $('#bRightX').onclick = UI.toggleRight; $('#bLay').onclick = UI.toggleLeft; $('#bPan').onclick = UI.toggleRight;
     $('#bNewFolder').onclick = UI.newFolder; $('#bCollapse').onclick = () => { collapsed = collapsed.has('root') ? new Set() : new Set(['root', ...NODE_ORDER.map(x => 'nodes:' + x), 'pipes', 'cables', 'splices', 'imports', ...Object.keys(FT.state.folders || {})]); UI.refreshTree(); };
     $('#bLockAll').onclick = () => { Object.keys(FT.state.nodes).forEach(i => T().locked.add(i)); UI.refreshTree(); };
