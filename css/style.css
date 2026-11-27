@@ -153,3 +153,53 @@ body.nop #top>#themeSw{display:flex}
 :root[data-theme=light] #bLocal{color:#935c00}
 /* narrower screens: the top bar tightens so the logo in the middle keeps its place */
 @media(max-width:1400px){#top{gap:5px;padding:0 7px}#top .pill{padding:5px 8px;font-size:12px}#modeTabs{margin:0 2px}#modeTabs button{padding:6px 9px;font-size:12.5px}#themeSw button{padding:4px 6px}.projname{padding:6px 6px}#top .ib{width:28px}}
+
+/* fibre engine windows */
+.dlg.wide{width:min(940px,96vw)}
+.fx-chip{display:inline-block;border:1px solid;border-radius:20px;padding:2px 12px;font-weight:700;font-size:12.5px}
+.fx-dot{display:inline-block;width:11px;height:11px;border-radius:50%;margin-inline-end:6px;vertical-align:-1px;border:1px solid rgba(128,128,128,.7)}
+.fx-heads{display:grid;grid-template-columns:1fr 90px 1fr;gap:0;margin-top:10px}.fx-heads select{width:100%}
+.fx-board{display:grid;grid-template-columns:1fr 90px 1fr;align-items:start;max-height:44vh;overflow:auto;border:1px solid var(--line);border-radius:10px;padding:4px;background:var(--p2)}
+.fx-col{display:flex;flex-direction:column;min-width:0}.fx-wires{display:block;direction:ltr}
+.fx-end{height:26px;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:0 8px;border-radius:6px;font-size:12px;text-align:start;white-space:nowrap;overflow:hidden;border:1px solid transparent}
+.fx-end:hover{background:var(--p3)}.fx-end.used{background:var(--p3)}.fx-end.pick{border-color:var(--hot);background:rgba(255,106,61,.14)}
+.fx-end small{color:var(--mu);font-size:11px;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.fx-pager{display:flex;gap:8px;align-items:center;justify-content:center;margin-top:6px;font-size:12px}
+.fx-tools{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}.fx-tools .btn{font-size:12.5px;padding:6px 10px}
+.fx-h{color:var(--hot2);margin:16px 0 6px}.fx-scroll{max-height:26vh;overflow:auto}.fx-list td{font-size:12px}.fx-arrow{color:var(--mu);width:30px;text-align:center}
+.fx-issues{background:rgba(255,194,51,.1);border:1px solid var(--warn);border-radius:10px;padding:8px 12px;margin-top:8px;font-size:12.5px}.fx-issues div{margin:3px 0}
+.fx-go{font-size:11px;color:var(--hot2);text-decoration:underline;padding:0 4px}
+ol.fx-steps{list-style:none;margin:0;padding:0;border-inline-start:2px solid var(--line)}ol.fx-steps li{position:relative;padding:5px 14px;font-size:12.5px}
+ol.fx-steps li::before{content:"";position:absolute;inset-inline-start:-6px;top:11px;width:10px;height:10px;border-radius:50%;background:var(--p3);border:2px solid var(--mu)}
+ol.fx-steps li.olt::before{border-color:var(--ok);background:var(--ok)}ol.fx-steps li.spl::before{border-color:var(--hot);background:var(--hot)}ol.fx-steps li.fus{color:var(--mu)}
+ol.fx-steps small,ul.fx-tree small{display:block;color:var(--mu);font-size:11px}
+ul.fx-tree{list-style:none;margin:0;padding-inline-start:14px;border-inline-start:1px dashed var(--line)}ul.fx-tree li{padding:3px 0;font-size:12.5px}ul.fx-tree li.warn{color:var(--warn)}ul.fx-tree li.free{color:var(--mu)}
+.fx-budget td,.fx-budget th{font-size:12.5px;padding:5px 8px}.fx-budget tr.sum td{font-weight:800}
+.fx-as{margin-top:10px;font-size:12.5px}.fx-as summary{cursor:pointer;color:var(--hot2)}.fx-src{display:block;color:var(--mu);font-size:11px}
+.fx-ports{margin:6px 0}.fx-portrow{display:flex;flex-wrap:wrap;gap:4px}.fx-port{width:30px;height:26px;border-radius:6px;border:1px solid var(--line);background:var(--p3);font-size:12px}
+.fx-port.fus{border-color:var(--warn);color:var(--warn)}.fx-port.onu{border-color:#35e0c9;background:rgba(53,224,201,.14);color:#35e0c9}
+.fx-str{cursor:pointer}.fx-str:hover{text-decoration:underline}
+.fx-pick{display:grid;gap:6px;max-height:60vh;overflow:auto}
+
+.fx-port.pick{outline:2px solid var(--hot);outline-offset:1px;background:rgba(255,106,61,.18);color:var(--hot2)}.fx-port:disabled{cursor:not-allowed;opacity:.85}
+.fx-bar{display:block;height:7px;border-radius:5px;background:var(--p3);overflow:hidden;margin:4px 0 8px}.fx-bar i{display:block;height:100%;background:var(--hot)}
+.fx-pon{border:1px solid var(--line);border-radius:10px;padding:4px 8px;margin:5px 0;font-size:12.5px}.fx-pon summary{cursor:pointer;display:flex;justify-content:space-between;gap:8px}
+.fx-pn{display:flex;justify-content:space-between;gap:6px;padding-block:2px}.fx-pn small{color:var(--mu)}.fx-pn.warn{color:var(--warn)}
+
+.dr-box{max-height:44vh;overflow:auto;border:1px solid var(--line);border-radius:10px;padding:2px 6px}
+table.dr td,table.dr th{font-size:12px;padding:5px 6px}table.dr th{position:sticky;top:0;background:var(--p1)}table.dr small{color:var(--mu);font-size:10.5px}
+
+.cov-leg{display:flex;flex-wrap:wrap;gap:8px;font-size:11.5px;margin:6px 0}.cov-leg span{display:flex;gap:4px;align-items:center}.cov-leg i{width:12px;height:12px;border-radius:3px;display:inline-block}
+
+.convb{background:none;border:0;color:var(--mu);font-size:13px;padding:0 4px;cursor:pointer}.convb:hover{color:var(--hot2)}
+
+/* upload-to-server button and its window */
+.cl-box{display:flex;gap:12px;align-items:flex-start;padding:12px 14px;border-radius:12px;border:1px solid var(--line);background:var(--p3);margin-bottom:10px}
+.cl-box b{display:block;font-size:15px;margin-bottom:3px}.cl-box p{margin:0;color:var(--mu);font-size:12.5px;line-height:1.7}
+.cl-ico{flex:none;width:36px;height:36px;border-radius:50%;display:grid;place-items:center;font-weight:800;font-size:20px;color:#fff}
+.cl-box.ok{border-color:#17a86b}.cl-box.ok .cl-ico{background:#17a86b}.cl-box.bad{border-color:#e5484d}.cl-box.bad .cl-ico{background:#e5484d}.cl-box.wait .cl-ico{background:#e0a100;animation:clp 1s ease-in-out infinite}
+@keyframes clp{50%{opacity:.4}}
+.cl-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-inline-end:6px;background:#9aa1b6;vertical-align:middle}.cl-dot.saved{background:#2bd18b}.cl-dot.sending{background:#ffc233;animation:clp 1s infinite}.cl-dot.offline{background:#e5484d}
+#bCloud{border-color:var(--hot);font-weight:700}
+.btn.full{width:100%;margin-top:6px}
+@media(max-width:1300px){#bCloud .cl-lab{display:none}}

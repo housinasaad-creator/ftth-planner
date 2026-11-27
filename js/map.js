@@ -17,32 +17,74 @@
   M.insideGov = ll => !BOUND || BOUND.polygons.some(r => FT.pointInRing(ll, r));
 
   // ---------------- icons (own drawings, same colours/abbreviations as the unit names) ----------------
-  function icon(type, size) {
+  function icon(type, size, onDark) {
+    const EDGE = onDark ? '#ffffff' : '#07090d', BODY = onDark ? '#eef1f8' : '#171b25';
     const s = size || 64, c = document.createElement('canvas'); c.width = c.height = s; const g = c.getContext('2d');
     const col = FT.NODE_TYPES[type] ? FT.NODE_TYPES[type].color : '#9aa1b6';
     g.translate(s / 2, s / 2); g.lineJoin = 'round'; g.lineCap = 'round';
     const ring = (r, fill, stroke, lw) => { g.beginPath(); g.arc(0, 0, r, 0, 7); g.fillStyle = fill; g.fill(); g.lineWidth = lw; g.strokeStyle = stroke; g.stroke(); };
-    const badge = txt => { ring(s * 0.42, col, '#07090d', s * 0.06); g.fillStyle = '#07090d'; g.font = '800 ' + s * (txt.length > 3 ? 0.22 : txt.length > 2 ? 0.26 : 0.3) + 'px IBM Plex Sans Arabic, Arial'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(txt, 0, s * 0.02); };
+    const badge = txt => { ring(s * 0.42, col, EDGE, s * 0.06); g.fillStyle = '#07090d'; g.font = '800 ' + s * (txt.length > 3 ? 0.22 : txt.length > 2 ? 0.26 : 0.3) + 'px IBM Plex Sans Arabic, Arial'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(txt, 0, s * 0.02); };
     if (type === 'olt') { // rack unit: rounded box with 3 slots and LEDs
-      g.fillStyle = col; g.strokeStyle = '#07090d'; g.lineWidth = s * 0.06; const w = s * 0.7, h = s * 0.74; g.beginPath(); g.roundRect(-w / 2, -h / 2, w, h, s * 0.12); g.fill(); g.stroke();
+      g.fillStyle = col; g.strokeStyle = EDGE; g.lineWidth = s * 0.06; const w = s * 0.7, h = s * 0.74; g.beginPath(); g.roundRect(-w / 2, -h / 2, w, h, s * 0.12); g.fill(); g.stroke();
       g.fillStyle = '#07090d'; for (let i = -1; i <= 1; i++) { g.beginPath(); g.roundRect(-w * 0.36, i * h * 0.26 - h * 0.08, w * 0.72, h * 0.16, s * 0.03); g.fill(); }
       g.fillStyle = '#eafff4'; for (let i = -1; i <= 1; i++) { g.beginPath(); g.arc(w * 0.24, i * h * 0.26, s * 0.03, 0, 7); g.fill(); }
     } else if (type === 'sk') badge('FDC'); else if (type === 'dk') badge('iFDC'); else if (type === 'bk') badge('FDB');
-    else if (type === 'mh') { ring(s * 0.36, '#171b25', col, s * 0.07); g.strokeStyle = col; g.lineWidth = s * 0.06; g.beginPath(); g.moveTo(-s * 0.2, 0); g.lineTo(s * 0.2, 0); g.moveTo(0, -s * 0.2); g.lineTo(0, s * 0.2); g.stroke(); }
-    else if (type === 'hh') { g.fillStyle = '#171b25'; g.strokeStyle = col; g.lineWidth = s * 0.07; g.beginPath(); g.roundRect(-s * 0.27, -s * 0.27, s * 0.54, s * 0.54, s * 0.08); g.fill(); g.stroke(); g.beginPath(); g.moveTo(-s * 0.13, 0); g.lineTo(s * 0.13, 0); g.stroke(); }
+    else if (type === 'mh') { ring(s * 0.36, BODY, col, s * 0.07); g.strokeStyle = onDark ? '#161b24' : col; g.lineWidth = onDark ? s * 0.09 : s * 0.06; g.beginPath(); g.moveTo(-s * 0.2, 0); g.lineTo(s * 0.2, 0); g.moveTo(0, -s * 0.2); g.lineTo(0, s * 0.2); g.stroke(); }
+    else if (type === 'hh') { g.fillStyle = BODY; g.strokeStyle = col; g.lineWidth = s * 0.07; g.beginPath(); g.roundRect(-s * 0.27, -s * 0.27, s * 0.54, s * 0.54, s * 0.08); g.fill(); g.stroke(); if (onDark) g.strokeStyle = '#161b24'; g.beginPath(); g.moveTo(-s * 0.13, 0); g.lineTo(s * 0.13, 0); g.stroke(); }
     else if (type === 'edgeh' || type === 'moveh') { // edit handles: coral disc with arrows (pointing up; rotated on the map)
       ring(s * 0.4, type === 'edgeh' ? '#ff6a3d' : '#ffffff', '#07090d', s * 0.06); g.strokeStyle = type === 'edgeh' ? '#ffffff' : '#07090d'; g.fillStyle = g.strokeStyle; g.lineWidth = s * 0.07;
       const ar = (dx, dy) => { g.save(); g.rotate(Math.atan2(dx, -dy)); g.beginPath(); g.moveTo(0, -s * 0.27); g.lineTo(s * 0.11, -s * 0.12); g.lineTo(-s * 0.11, -s * 0.12); g.closePath(); g.fill(); g.restore(); };
       if (type === 'edgeh') { g.beginPath(); g.moveTo(0, -s * 0.18); g.lineTo(0, s * 0.18); g.stroke(); ar(0, -1); ar(0, 1); } else { g.beginPath(); g.moveTo(0, -s * 0.18); g.lineTo(0, s * 0.18); g.moveTo(-s * 0.18, 0); g.lineTo(s * 0.18, 0); g.stroke(); ar(0, -1); ar(0, 1); ar(1, 0); ar(-1, 0); }
     }
-    else if (type === 'pole') { g.strokeStyle = '#07090d'; g.lineWidth = s * 0.2; g.beginPath(); g.moveTo(0, s * 0.4); g.lineTo(0, -s * 0.38); g.moveTo(-s * 0.3, -s * 0.22); g.lineTo(s * 0.3, -s * 0.22); g.stroke(); g.strokeStyle = col; g.lineWidth = s * 0.1; g.beginPath(); g.moveTo(0, s * 0.38); g.lineTo(0, -s * 0.36); g.moveTo(-s * 0.28, -s * 0.22); g.lineTo(s * 0.28, -s * 0.22); g.stroke(); }
-    else if (type === 'splice') { ring(s * 0.3, '#ff6a3d', '#07090d', s * 0.06); g.strokeStyle = '#07090d'; g.lineWidth = s * 0.06; g.beginPath(); g.moveTo(-s * 0.16, -s * 0.16); g.lineTo(s * 0.16, s * 0.16); g.moveTo(s * 0.16, -s * 0.16); g.lineTo(-s * 0.16, s * 0.16); g.stroke(); }
-    else if (type === 'sub') { ring(s * 0.28, '#7ad7ff', '#07090d', s * 0.06); }
-    else if (type === 'ap' || type === 'cpe' || type === 'ptp') { const wc = { ap: '#35e0c9', cpe: '#ffd24a', ptp: '#b57bff' }[type]; ring(s * 0.2, wc, '#07090d', s * 0.06); g.strokeStyle = wc; g.lineWidth = s * 0.06; for (const r of [0.32, 0.44]) { g.beginPath(); g.arc(0, 0, s * r, -0.9, 0.9); g.stroke(); g.beginPath(); g.arc(0, 0, s * r, Math.PI - 0.9, Math.PI + 0.9); g.stroke(); } }
+    else if (type === 'pole') { g.strokeStyle = EDGE; g.lineWidth = s * 0.2; g.beginPath(); g.moveTo(0, s * 0.4); g.lineTo(0, -s * 0.38); g.moveTo(-s * 0.3, -s * 0.22); g.lineTo(s * 0.3, -s * 0.22); g.stroke(); g.strokeStyle = col; g.lineWidth = s * 0.1; g.beginPath(); g.moveTo(0, s * 0.38); g.lineTo(0, -s * 0.36); g.moveTo(-s * 0.28, -s * 0.22); g.lineTo(s * 0.28, -s * 0.22); g.stroke(); }
+    else if (type === 'splice') { ring(s * 0.3, '#ff6a3d', EDGE, s * 0.06); g.strokeStyle = '#07090d'; g.lineWidth = s * 0.06; g.beginPath(); g.moveTo(-s * 0.16, -s * 0.16); g.lineTo(s * 0.16, s * 0.16); g.moveTo(s * 0.16, -s * 0.16); g.lineTo(-s * 0.16, s * 0.16); g.stroke(); }
+    else if (type === 'sub') { ring(s * 0.28, '#7ad7ff', EDGE, s * 0.06); }
+    else if (type === 'ap' || type === 'cpe' || type === 'ptp') { const wc = { ap: '#35e0c9', cpe: '#ffd24a', ptp: '#b57bff' }[type]; ring(s * 0.2, wc, EDGE, s * 0.06); g.strokeStyle = wc; g.lineWidth = s * 0.06; for (const r of [0.32, 0.44]) { g.beginPath(); g.arc(0, 0, s * r, -0.9, 0.9); g.stroke(); g.beginPath(); g.arc(0, 0, s * r, Math.PI - 0.9, Math.PI + 0.9); g.stroke(); } }
     return g.getImageData(0, 0, s, s);
   }
   const iconCache = {};
   M.iconDataURL = function (type, size) { const k = type + '|' + (size || 64); if (iconCache[k]) return iconCache[k]; const d = icon(type, size || 64), c = document.createElement('canvas'); c.width = d.width; c.height = d.height; c.getContext('2d').putImageData(d, 0, 0); return (iconCache[k] = c.toDataURL()); };
+
+  // on-screen size of each element icon, in pixels, and how many pixels its drawing covers at icon-size 1 (32 px image)
+  function splitterIcon() { const s = 64, c = document.createElement('canvas'); c.width = c.height = s; const g = c.getContext('2d'); g.fillStyle = '#ff6a3d'; g.strokeStyle = '#ffffff'; g.lineWidth = 3.5; g.beginPath(); g.roundRect(14, 14, 36, 36, 7); g.fill(); g.stroke(); g.lineWidth = 3.6; g.lineCap = 'round'; g.beginPath(); g.moveTo(21, 32); g.lineTo(30, 32); g.moveTo(30, 32); g.lineTo(43, 22); g.moveTo(30, 32); g.lineTo(43, 32); g.moveTo(30, 32); g.lineTo(43, 42); g.stroke(); return g.getImageData(0, 0, s, s); }
+  function ratioPill() { const W = 24, H = 18, r = 2, c = document.createElement('canvas'); c.width = W * r; c.height = H * r; const g = c.getContext('2d'); g.scale(r, r); g.fillStyle = '#ff6a3d'; g.beginPath(); g.roundRect(0, 0, W, H, 5); g.fill(); g.fillStyle = '#0e1117'; g.beginPath(); g.roundRect(1.2, 1.2, W - 2.4, H - 2.4, 4); g.fill(); return g.getImageData(0, 0, c.width, c.height); }
+  M.ratioText = n => { const k = n && n.ratio ? Math.max(1, parseInt(n.nsplit, 10) || 1) : 0; return k ? (k > 1 ? k + '×' : '') + n.ratio : ''; };
+  M.addRatioLayers = function () {
+    if (!map.hasImage('i-spl')) map.addImage('i-spl', splitterIcon(), { pixelRatio: 2 });
+    if (!map.hasImage('ratio-pill')) map.addImage('ratio-pill', ratioPill(), { pixelRatio: 2, stretchX: [[12, 36]], stretchY: [[12, 24]], content: [8, 5, 40, 31] });
+    const side = ['==', ['get', 'type'], 'bk'];
+    map.addLayer({ id: 'spl-icon', type: 'symbol', source: 'nodes', minzoom: 15.2, filter: ['!=', ['coalesce', ['get', 'rt'], ''], ''], layout: { 'icon-image': 'i-spl', 'icon-size': 1, 'icon-offset': ['case', side, ['literal', [18, 0]], ['literal', [0, -21]]], 'icon-allow-overlap': true, 'icon-ignore-placement': true } });
+    map.addLayer({ id: 'spl-lab', type: 'symbol', source: 'nodes', minzoom: 15.2, filter: ['!=', ['coalesce', ['get', 'rt'], ''], ''], layout: { 'icon-image': 'ratio-pill', 'icon-text-fit': 'both', 'icon-text-fit-padding': [1, 3, 1, 3], 'text-field': ['get', 'rt'], 'text-font': ['Noto Sans Bold'], 'text-size': 10, 'text-offset': ['case', side, ['literal', [1.8, -1.65]], ['literal', [0, -3.75]]], 'text-allow-overlap': true, 'icon-allow-overlap': true, 'text-ignore-placement': true, 'icon-ignore-placement': true }, paint: { 'text-color': '#ffffff' } });
+  };
+  M.SEL = '#ff6a3d';
+  M.addSelectionLayers = function () {
+    map.addSource('msel', { type: 'geojson', data: EMPTY });
+    const under = map.getLayer('pipes-case') ? 'pipes-case' : undefined;
+    map.addLayer({ id: 'msel-line', type: 'line', source: 'msel', filter: ['==', ['geometry-type'], 'LineString'], layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': M.SEL, 'line-width': ['interpolate', ['linear'], ['zoom'], 10, 5, 18, 12], 'line-opacity': 0.75 } }, under);
+    const r = ['interpolate', ['linear'], ['zoom'], 9, 5, 13, 8, 15, 11.5, 20.5, 11.5];
+    map.addLayer({ id: 'msel-back', type: 'circle', source: 'msel', filter: ['==', ['geometry-type'], 'Point'], paint: { 'circle-radius': r, 'circle-color': '#07090d', 'circle-opacity': 0.9 } }, 'nodes');
+    map.addLayer({ id: 'msel-ring', type: 'circle', source: 'msel', filter: ['==', ['geometry-type'], 'Point'], paint: { 'circle-radius': r, 'circle-color': 'rgba(0,0,0,0)', 'circle-stroke-color': M.SEL, 'circle-stroke-width': 2.6 } }, 'nodes');
+  };
+  M.setDone = function (ring, open) { // a finished area (closed) or a finished measured line (open)
+    if (!map || !map.getSource('done')) return;
+    const f = !ring || ring.length < 2 ? [] : [{ type: 'Feature', properties: {}, geometry: open || ring.length < 3 ? { type: 'LineString', coordinates: ring } : { type: 'Polygon', coordinates: [ring.concat([ring[0]])] } }];
+    M.doneRing = f.length ? ring : null; map.getSource('done').setData({ type: 'FeatureCollection', features: f });
+  };
+  M.setMulti = function (m) { // ring every selected node, glow every selected line (very large selections: the first 4000)
+    if (!map || !map.getSource('msel')) return; const S = FT.state, f = [];
+    if (m) {
+      [...(m.nodes || [])].slice(0, 4000).forEach(id => { const n = S.nodes[id]; if (n) f.push({ type: 'Feature', properties: {}, geometry: { type: 'Point', coordinates: n.ll } }); });
+      [...(m.pipes || [])].slice(0, 4000).forEach(id => { const p = S.pipes[id]; if (p && p.pts.length > 1) f.push({ type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: p.pts } }); });
+      [...(m.cables || [])].slice(0, 4000).forEach(id => { const c = S.cables[id]; if (!c) return; const pts = [].concat(...FT.cableSpans(c).map((s, i) => i ? s.pts.slice(1) : s.pts)); if (pts.length > 1) f.push({ type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: pts } }); });
+    }
+    map.getSource('msel').setData({ type: 'FeatureCollection', features: f });
+  };
+  M.ICON_PX = { olt: 22, sk: 15.5, dk: 15.5, bk: 15, mh: 15, hh: 14, pole: 16, splice: 13, sub: 12 };
+  const DRAWN_PX = { olt: 25.6, sk: 28.8, dk: 28.8, bk: 28.8, mh: 25.3, hh: 19.5, pole: 29, splice: 21.1, sub: 19.8 };
+  M.nodeIconSize = function () {
+    const at = k => { const m = ['match', ['get', 'type']]; Object.keys(M.ICON_PX).forEach(t => m.push(t, +(k * M.ICON_PX[t] / DRAWN_PX[t]).toFixed(3))); m.push(+(k * 0.52).toFixed(3)); return m; };
+    return ['interpolate', ['linear'], ['zoom'], 9, at(0.45), 13, at(0.65), 15, at(1), 20.5, at(1)];
+  };
 
   // ---------------- init ----------------
   M.init = async function (container) {
@@ -64,6 +106,7 @@
     await new Promise(res => map.on('load', res));
     const layers = map.getStyle().layers;
     if (map.getLayer('building-3d')) map.removeLayer('building-3d'); // OSM 3D replaced by our footprint layer
+    M.baseLayerIds = map.getStyle().layers.map(l => l.id); // the base map's own layers (everything added after this is ours)
     const firstSymbol = (layers.find(l => l.type === 'symbol') || {}).id;
     // dim everything outside the governorate
     const world = [[-180, -85], [180, -85], [180, 85], [-180, 85], [-180, -85]];
@@ -93,19 +136,26 @@
     map.addLayer({ id: 'imp-line', type: 'line', source: 'imp', filter: ['any', ['==', ['geometry-type'], 'LineString'], ['==', ['geometry-type'], 'Polygon']], paint: { 'line-color': '#7ad7ff', 'line-width': 2 } });
     map.addLayer({ id: 'imp-pt', type: 'circle', source: 'imp', filter: ['==', ['geometry-type'], 'Point'], paint: { 'circle-radius': 5, 'circle-color': '#7ad7ff', 'circle-stroke-color': '#07090d', 'circle-stroke-width': 1.5 } });
     map.addLayer({ id: 'wl-line', type: 'line', source: 'wl', layout: { 'line-cap': 'round' }, paint: { 'line-color': ['get', 'color'], 'line-width': 3, 'line-dasharray': [2, 1.2] } });
-    map.addLayer({ id: 'sel-line', type: 'line', source: 'sel', filter: ['==', ['geometry-type'], 'LineString'], paint: { 'line-color': '#ffffff', 'line-width': ['interpolate', ['linear'], ['zoom'], 10, 5, 18, 11], 'line-opacity': 0.45, 'line-blur': 1.5 } });
+    map.addLayer({ id: 'sel-line', type: 'line', source: 'sel', filter: ['==', ['geometry-type'], 'LineString'], paint: { 'line-color': '#ff6a3d', 'line-width': ['interpolate', ['linear'], ['zoom'], 10, 5, 18, 11], 'line-opacity': 0.7, 'line-blur': 1 } });
     map.addLayer({ id: 'draw-line', type: 'line', source: 'draw', filter: ['==', ['geometry-type'], 'LineString'], paint: { 'line-color': '#ffd24a', 'line-width': 3, 'line-dasharray': [2, 1.5] } });
-    map.addLayer({ id: 'draw-fill', type: 'fill', source: 'draw', filter: ['==', ['geometry-type'], 'Polygon'], paint: { 'fill-color': '#ff6a3d', 'fill-opacity': 0.14 } });
-    map.addLayer({ id: 'draw-poly-line', type: 'line', source: 'draw', filter: ['==', ['geometry-type'], 'Polygon'], paint: { 'line-color': '#ff8a62', 'line-width': 2.5, 'line-dasharray': [3, 2] } });
+    map.addLayer({ id: 'draw-fill', type: 'fill', source: 'draw', filter: ['==', ['geometry-type'], 'Polygon'], paint: { 'fill-color': '#ffc233', 'fill-opacity': 0.16 } });
+    map.addLayer({ id: 'draw-poly-line', type: 'line', source: 'draw', filter: ['==', ['geometry-type'], 'Polygon'], paint: { 'line-color': '#ffc233', 'line-width': 2.2 } });
+    // finished area: green, without corner points
+    map.addSource('done', { type: 'geojson', data: EMPTY });
+    map.addLayer({ id: 'done-fill', type: 'fill', source: 'done', filter: ['==', ['geometry-type'], 'Polygon'], paint: { 'fill-color': '#ff6a3d', 'fill-opacity': 0.14 } });
+    map.addLayer({ id: 'done-line', type: 'line', source: 'done', layout: { 'line-join': 'round', 'line-cap': 'round' }, paint: { 'line-color': '#ff6a3d', 'line-width': 2.6 } });
     map.addLayer({ id: 'draw-pt', type: 'circle', source: 'draw', filter: ['==', ['geometry-type'], 'Point'], paint: { 'circle-radius': 5, 'circle-color': '#ffd24a', 'circle-stroke-color': '#07090d', 'circle-stroke-width': 2 } });
     ['olt', 'sk', 'dk', 'bk', 'mh', 'hh', 'pole', 'splice', 'sub', 'ap', 'cpe', 'ptp', 'edgeh', 'moveh'].forEach(t => map.addImage('i-' + t, icon(t), { pixelRatio: 2 }));
     map.addLayer({ id: 'wdev', type: 'symbol', source: 'wd', layout: { 'icon-image': ['concat', 'i-', ['get', 'type']], 'icon-size': ['interpolate', ['linear'], ['zoom'], 9, 0.24, 14, 0.36, 17, 0.46, 19, 0.58], 'icon-allow-overlap': true, 'text-field': ['step', ['zoom'], '', 15.5, ['get', 'name']], 'text-font': ['Noto Sans Bold'], 'text-size': 10, 'text-offset': [0, 1.3], 'text-optional': true }, paint: { 'text-color': '#07090d', 'text-halo-color': '#ffffff', 'text-halo-width': 1.6 } });
-    map.addLayer({ id: 'nodes', type: 'symbol', source: 'nodes', layout: { 'symbol-sort-key': ['coalesce', ['get', 'z'], 0], 'icon-image': ['concat', 'i-', ['get', 'type']], 'icon-size': ['interpolate', ['linear'], ['zoom'], 9, 0.24, 14, 0.36, 17, 0.46, 19, 0.58], 'icon-allow-overlap': true, 'icon-ignore-placement': true,
+    map.addLayer({ id: 'nodes', type: 'symbol', source: 'nodes', layout: { 'symbol-sort-key': ['coalesce', ['get', 'z'], 0], 'icon-image': ['concat', 'i-', ['get', 'type']], 'icon-size': M.nodeIconSize(), 'icon-allow-overlap': true, 'icon-ignore-placement': true,
       'text-field': ['step', ['zoom'], '', 15.5, ['coalesce', ['get', 'lab'], ['get', 'name']]], 'text-font': ['Noto Sans Bold'], 'text-size': 10, 'text-offset': [0, 1.3], 'text-optional': true }, paint: { 'text-color': '#07090d', 'text-halo-color': '#ffffff', 'text-halo-width': 1.6 } });
-    map.addLayer({ id: 'nodes-sel', type: 'circle', source: 'sel', filter: ['==', ['geometry-type'], 'Point'], paint: { 'circle-radius': 13, 'circle-color': 'rgba(255,255,255,0)', 'circle-stroke-color': '#ffffff', 'circle-stroke-width': 3 } });
+    map.addLayer({ id: 'nodes-sel', type: 'circle', source: 'sel', filter: ['==', ['geometry-type'], 'Point'], paint: { 'circle-radius': 13, 'circle-color': 'rgba(255,255,255,0)', 'circle-stroke-color': '#ff6a3d', 'circle-stroke-width': 3 } });
     FT.houses.addImages(map); map.addSource('houses', { type: 'geojson', data: EMPTY, promoteId: 'id' });
-    map.addLayer({ id: 'house-sel', type: 'circle', source: 'houses', minzoom: FT.houses.MINZ, paint: { 'circle-radius': 19, 'circle-color': ['case', ['boolean', ['feature-state', 'sel'], false], '#ff6a3d', '#ffc4a3'], 'circle-opacity': ['case', ['any', ['boolean', ['feature-state', 'sel'], false], ['boolean', ['feature-state', 'hover'], false]], 0.55, 0], 'circle-translate': [0, -19] } }, 'nodes');
+    // the halo follows the icon's own rules (anchor, offset, size, upright on screen), so it is always centred on it
+    map.addLayer({ id: 'house-sel', type: 'symbol', source: 'houses', minzoom: FT.houses.MINZ, layout: { 'icon-image': ['concat', 'halo-', ['to-string', ['get', 'fl']]], 'icon-anchor': 'bottom', 'icon-offset': ['case', ['!=', ['get', 'lab'], ''], ['literal', [0, FT.houses.HALO - FT.houses.PLATE_LIFT]], ['literal', [0, FT.houses.HALO - 4]]], 'icon-size': ['interpolate', ['linear'], ['zoom'], 16.5, 0.7, 17.6, 0.92, 19.5, 1.35], 'icon-allow-overlap': true, 'icon-ignore-placement': true }, paint: { 'icon-color': ['case', ['boolean', ['feature-state', 'sel'], false], '#ff6a3d', '#ffc4a3'], 'icon-opacity': ['case', ['boolean', ['feature-state', 'sel'], false], 0.85, ['boolean', ['feature-state', 'hover'], false], 0.55, 0] } }, 'nodes');
     map.addLayer({ id: 'house', type: 'symbol', source: 'houses', minzoom: FT.houses.MINZ, layout: { 'icon-image': ['concat', 'house-', ['to-string', ['get', 'fl']]], 'icon-anchor': 'bottom', 'icon-offset': ['case', ['!=', ['get', 'lab'], ''], ['literal', [0, -FT.houses.PLATE_LIFT]], ['literal', [0, -4]]], 'icon-size': ['interpolate', ['linear'], ['zoom'], 16.5, 0.7, 17.6, 0.92, 19.5, 1.35], 'icon-allow-overlap': true, 'icon-ignore-placement': true, 'symbol-sort-key': ['-', 0, ['get', 'y']] } }, 'nodes');
+    M.addRatioLayers();
+    M.addSelectionLayers();
     map.addSource('plates', { type: 'geojson', data: EMPTY, promoteId: 'id' });
     map.addLayer({ id: 'house-num', type: 'symbol', source: 'plates', minzoom: FT.houses.MINZ, layout: { 'icon-image': 'house-plate', 'icon-text-fit': 'both', 'icon-text-fit-padding': [1, 3, 0, 3], 'text-field': ['get', 'lab'], 'text-font': ['Noto Sans Bold'],
       'text-size': ['interpolate', ['linear'], ['zoom'], 16.5, 9.5, 17.6, 11, 19.5, 16], 'text-anchor': 'top', 'text-offset': [0, -1.45], 'icon-allow-overlap': true, 'text-allow-overlap': true, 'icon-ignore-placement': true, 'text-ignore-placement': true, 'symbol-sort-key': ['-', 0, ['get', 'y']] }, paint: { 'text-color': '#07090d' } }, 'nodes');
@@ -120,7 +170,7 @@
     let plateRaf = 0; map.on('move', () => { if (M.base !== '3d' || plateRaf) return; plateRaf = requestAnimationFrame(() => { plateRaf = 0; M.renderPlates(); }); });
     // streets can arrive after the buildings: once the map is quiet, place the markers that were still waiting for a street (once per move)
     let retry = false; map.on('moveend', () => { retry = true; }); map.on('idle', () => { if (retry && M._housesWaiting && FT.roads) { retry = false; FT.roads.dirty = true; M.rebuildHouses(); } });
-    M.ready = true; M.scheduleBuildings(); M.renderNet();
+    M.ready = true; M.applyTheme(); M.scheduleBuildings(); M.renderNet();
     FT.onChange(why => M.renderNet(why));
     map.on('moveend', () => { // moved/zoomed out of the area that was built, or the cables just became visible: rebuild once
       if (M.netHidden || !M._builtBB) return; const b = map.getBounds(), bb = M._builtBB;
@@ -148,6 +198,36 @@
   M.hover = function (ll, pt) {
     if (!pt || !map.getLayer('house')) { hoverHouse(null); return; }
     const hs = map.queryRenderedFeatures([pt.x, pt.y], { layers: ['house', 'house-num', 'm3d'] }).filter(f => f.layer.id !== 'm3d' || f.properties.kind === 'house'); hoverHouse(hs.length ? hs[0].properties.id || hs[0].properties.mid : null);
+  };
+  // ---------------- grey map for the dark look ----------------
+  const GREY = { ground: '#2c3038', land: '#31363f', green: '#30383a', water: '#1e242e', building: '#3d434e', road: '#6f7787', minor: '#575e6b', path: '#4b515d', casing: '#23272e', rail: '#565c68', border: '#8c93a4', other: '#474d58', text: '#d5d9e2', halo: '#1b1f26' };
+  function greyFor(l) { // which grey a base layer gets, from what it draws
+    const s = (l['source-layer'] || '') + ' ' + l.id;
+    if (/water/.test(s)) return GREY.water; if (/building/.test(s)) return GREY.building; if (/park|landcover|wood|grass|forest|cemetery|pitch/.test(s)) return GREY.green;
+    if (l.type === 'line') { if (/boundary/.test(s)) return GREY.border; if (/casing/.test(s)) return GREY.casing; if (/rail|transit/.test(s)) return GREY.rail; if (/path|track|pedestrian|footway/.test(s)) return GREY.path; if (/motorway|trunk|primary|secondary|tertiary|link/.test(s)) return GREY.road; if (/transportation|road|street|bridge|tunnel|minor|service/.test(s)) return GREY.minor; return GREY.other; }
+    return GREY.land;
+  }
+  const baseOrig = {};
+  M.applyTheme = function () {
+    if (!map || !M.baseLayerIds) return; const dark = !FT.UI || FT.UI.theme() === 'dark';
+    const set = (id, prop, value) => { const k = id + '|' + prop; if (!(k in baseOrig)) baseOrig[k] = map.getPaintProperty(id, prop); map.setPaintProperty(id, prop, dark ? value : baseOrig[k]); };
+    M.baseLayerIds.forEach(id => {
+      const l = map.getLayer(id) && map.getStyle().layers.find(x => x.id === id); if (!l) return;
+      if (l.type === 'background') set(id, 'background-color', GREY.ground);
+      else if (l.type === 'fill') { set(id, 'fill-color', greyFor(l)); const k = id + '|fill-pattern'; if (!(k in baseOrig)) baseOrig[k] = map.getPaintProperty(id, 'fill-pattern'); if (baseOrig[k]) set(id, 'fill-opacity', 0.08); set(id, 'fill-outline-color', greyFor(l)); }
+      else if (l.type === 'line') set(id, 'line-color', greyFor(l));
+      else if (l.type === 'symbol') { set(id, 'text-color', GREY.text); set(id, 'text-halo-color', GREY.halo); set(id, 'icon-opacity', 0.55); }
+      else if (l.type === 'raster') { set(id, 'raster-saturation', -1); set(id, 'raster-brightness-max', 0.28); }
+    });
+    if (map.getLayer('bld-3d')) map.setPaintProperty('bld-3d', 'fill-extrusion-color', ['case', ['==', ['get', 'st'], 1], '#7ad7ff', dark ? '#3e444f' : '#d9d4cb']);
+    if (map.getLayer('mask')) map.setPaintProperty('mask', 'fill-opacity', dark ? 0.62 : 0.45);
+    M.theme = dark ? 'dark' : 'light';
+    ['olt', 'sk', 'dk', 'bk', 'mh', 'hh', 'pole', 'splice', 'sub', 'ap', 'cpe', 'ptp'].forEach(t => { if (map.hasImage('i-' + t)) map.updateImage('i-' + t, icon(t, undefined, dark)); });
+    const paint = (id, prop, v) => { if (map.getLayer(id)) map.setPaintProperty(id, prop, v); };
+    map.getStyle().layers.forEach(l => { if (M.baseLayerIds.includes(l.id) || l.type !== 'symbol' || l.id === 'house-num') return; const k = l.id + '|text-color'; if (!(k in baseOrig)) { baseOrig[k] = map.getPaintProperty(l.id, 'text-color'); baseOrig[l.id + '|text-halo-color'] = map.getPaintProperty(l.id, 'text-halo-color'); } if (baseOrig[k] !== '#07090d') return; paint(l.id, 'text-color', dark ? '#ffffff' : baseOrig[k]); paint(l.id, 'text-halo-color', dark ? '#11141b' : baseOrig[l.id + '|text-halo-color']); });
+    paint('pipes-case', 'line-color', dark ? '#e9edf6' : '#07090d'); paint('pipes-case', 'line-opacity', dark ? 0.4 : 0.55);
+    ['imp-pt', 'draw-pt', 'bh-vtx'].forEach(id => paint(id, 'circle-stroke-color', dark ? '#ffffff' : '#07090d'));
+    if (M.base === '3d') M.render3d();
   };
   M.setBase = function (kind) {
     map.setLayoutProperty('sat', 'visibility', kind === 'sat' ? 'visible' : 'none');
@@ -234,7 +314,7 @@
     map.getSource('m3d').setData({ type: 'FeatureCollection', features: out });
     if (FT.T && FT.T.sel && on) map.setFeatureState({ source: 'm3d', id: FT.T.sel.id }, { sel: true });
   };
-  M.flatIcons = function () { const o = M.base === '3d' ? 0 : 1; ['house', 'nodes'].forEach(i => map.getLayer(i) && map.setPaintProperty(i, 'icon-opacity', o)); if (map.getLayer('house-sel')) map.setLayoutProperty('house-sel', 'visibility', M.base === '3d' || M.hideHouses ? 'none' : 'visible'); };
+  M.flatIcons = function () { const o = M.base === '3d' ? 0 : 1; ['spl-icon', 'spl-lab'].forEach(i => map.getLayer(i) && map.setLayoutProperty(i, 'visibility', M.base === '3d' ? 'none' : 'visible')); ['house', 'nodes'].forEach(i => map.getLayer(i) && map.setPaintProperty(i, 'icon-opacity', o)); if (map.getLayer('house-sel')) map.setLayoutProperty('house-sel', 'visibility', M.base === '3d' || M.hideHouses ? 'none' : 'visible'); };
   const ringIndex = new Map(); let indexed = new Set();
   M.ringAny = id => { // the drawing of a building, loaded tiles included (open ring)
     const o = (FT.state.bld || {})[id]; if (o && o.fp) return o.fp; const f = M.buildingRing(id); if (f) return f.slice(0, -1);
@@ -303,7 +383,7 @@
     const zN = FT.zOrder('nodes'), zP = FT.zOrder('pipes'), zC = FT.zOrder('cables'), showCables = map.getZoom() >= M.CABLE_MINZ, bb = M.viewBB(); M._builtBB = bb;
     M._netDirty = false;
     const hid = (FT.T && FT.T.hidden) || new Set(), hu = (FT.sync && FT.sync.active && FT.sync.hiddenUsers) || new Set(), shown = o => !hid.has(o.id) && !(hu.size && hu.has(o.by || '-')), nodeList = Object.values(S.nodes).filter(n => shown(n) && inBB(n.ll, bb)), nodeIn = new Set(nodeList.map(n => n.id));
-    map.getSource('nodes').setData({ type: 'FeatureCollection', features: nodeList.map(n => ({ type: 'Feature', id: n.id, properties: { id: n.id, type: n.type, name: n.name, lab: n.name.replace(/^(F\d+)-(PS\d+)-(P\d+)-D\d+-FDB\d+$/, '$1·$2·$3'), z: zN[n.id] || 0 }, geometry: { type: 'Point', coordinates: n.ll } })).concat(Object.values(S.splices).filter(sp => nodeIn.has(sp.node) && shown(sp)).map(sp => { const n = S.nodes[sp.node]; return n ? { type: 'Feature', id: sp.id, properties: { id: sp.id, type: 'splice', name: sp.label || '' }, geometry: { type: 'Point', coordinates: [n.ll[0] + 0.00003, n.ll[1] + 0.00003] } } : null; }).filter(Boolean)) });
+    map.getSource('nodes').setData({ type: 'FeatureCollection', features: nodeList.map(n => ({ type: 'Feature', id: n.id, properties: { id: n.id, type: n.type, name: n.name, rt: M.ratioText(n), lab: n.name.replace(/^(F\d+)-(PS\d+)-(P\d+)-D\d+-FDB\d+$/, '$1·$2·$3'), z: zN[n.id] || 0 }, geometry: { type: 'Point', coordinates: n.ll } })).concat(Object.values(S.splices).filter(sp => nodeIn.has(sp.node) && shown(sp) && FT.isClosure(sp)).map(sp => { const n = S.nodes[sp.node]; return n ? { type: 'Feature', id: sp.id, properties: { id: sp.id, type: 'splice', name: sp.label || '' }, geometry: { type: 'Point', coordinates: [n.ll[0] + 0.00003, n.ll[1] + 0.00003] } } : null; }).filter(Boolean)) });
     map.getSource('pipes').setData({ type: 'FeatureCollection', features: Object.values(S.pipes).filter(p => shown(p) && lineIn(p.pts, bb)).map(p => ({ type: 'Feature', id: p.id, properties: { id: p.id, z: zP[p.id] || 0, color: p.color || null, aerial: p.ptype === 'aerial' ? 1 : 0 }, geometry: { type: 'LineString', coordinates: p.pts } })) });
     if (showCables) { M._cablesDirty = false; map.getSource('cables').setData({ type: 'FeatureCollection', features: Object.values(S.cables).filter(c => shown(c) && ((c.pts && lineIn(c.pts, bb)) || [c.a, c.b].some(i => S.nodes[i] && inBB(S.nodes[i].ll, bb)))).map(c => { const pts = [].concat(...FT.cableSpans(c).map((s, i) => i ? s.pts.slice(1) : s.pts)); const g = (FT.CABLE_CAT.find(x => x.id === c.cat) || {}).group || 'Feeder'; return { type: 'Feature', id: c.id, properties: { id: c.id, z: zC[c.id] || 0, color: c.color || CABLE_COL[g] }, geometry: { type: 'LineString', coordinates: pts.length > 1 ? pts : (c.pts || []) } }; }) }); } else M._cablesDirty = true;
     if (FT.wl) FT.wl.render();
@@ -313,7 +393,7 @@
   M.netLayers = () => map.getStyle().layers.filter(l => l.source === 'nodes' || l.source === 'pipes' || l.source === 'cables').map(l => l.id);
   M.setNetHidden = function (v) {
     M.netHidden = !!v; M.netLayers().forEach(id => map.setLayoutProperty(id, 'visibility', v ? 'none' : 'visible'));
-    if (!v) M.renderNetNow(['lod']); else M.render3d();
+    if (!v) { M.renderNetNow(['lod']); M.flatIcons(); } else M.render3d();
   };
   M.setSelection = function (kind, id) {
     if (map.getSource('m3d')) { if (M._sel3 && M._sel3 !== id) map.setFeatureState({ source: 'm3d', id: M._sel3 }, { sel: false }); M._sel3 = kind === 'node' ? id : null; if (M._sel3) map.setFeatureState({ source: 'm3d', id }, { sel: true }); }

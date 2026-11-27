@@ -33,14 +33,16 @@
     if (T.tool === t && t !== 'select') t = 'select';
     T.draw = null; T.tool = t; T.opt = opt || null; // keep the selection (needed by Connect subscriber)
     map.getCanvas().style.cursor = t === 'select' ? '' : 'crosshair';
-    FT.map.setDraw([]); U().meter(null); U().toolChanged();
+    FT.map.setDraw([]); if (t !== 'select') FT.map.setDone(null); U().meter(null); U().toolChanged();
   };
   T.backPoint = function () { if (!T.draw || !T.draw.pts.length) return; T.draw.pts.pop(); T.draw.nodes.pop(); preview(); U().refreshStatus(); };
   T.cancel = function (silent) {
     if (T.movePick) { T.endHouseMove(); return true; }
+    if (!silent && !T.draw && FT.map.doneRing) { FT.map.setDone(null); if (T.sel || T.multi) T.select(null); U().hint(''); return true; } // first step back: the finished area and its rings
     if (T.draw) { T.draw = null; FT.map.setDraw([]); U().meter(null); if (!silent) U().refreshStatus(); return true; }
     if (T.tool !== 'select' && !silent) { T.setTool('select'); return true; }
     if (T.sel || T.multi) { T.select(null); return true; }
+    if (FT.map.doneRing) { FT.map.setDone(null); U().hint(''); return true; }
     return false;
   };
 
@@ -49,6 +51,7 @@
   T.clearBuildingSel = () => { T.bsel = new Set(); };
   T.select = function (kind, id) {
     T.sel = kind ? { kind, id } : null; if (kind) T.multi = null;
+    FT.map.setMulti(null); FT.map.setDone(null);
     if (kind === 'bld') T.bsel = new Set([id]); else T.bsel = new Set();
     FT.map.setSelection(kind, id); FT.map.setBuildingSelection(new Set(T.bsel));
     if (FT.bedit) FT.bedit.refresh(); const ch = kind && U().reveal ? U().reveal(kind, id) : false;
@@ -60,7 +63,7 @@
     const last = T.bsel.has(id) ? id : [...T.bsel].pop(); T.multi = null; T.sel = last ? { kind: 'bld', id: last } : null;
     FT.map.setSelection(null); FT.map.setBuildingSelection(new Set(T.bsel)); FT.bedit.refresh(); U().selectionChanged(); U().treeSelect();
   };
-  T.selectMulti = function (m) { T.multi = m; T.sel = null; FT.map.setSelection(null); U().selectionChanged(); U().treeSelect(); };
+  T.selectMulti = function (m) { T.multi = m; T.sel = null; FT.map.setSelection(null); FT.map.setMulti(m); if (m && m.houses) FT.map.setBuildingSelection(new Set(m.houses)); U().selectionChanged(); U().treeSelect(); };
 
   function nodeNear(pt, r) {
     r = r || 16; let best = null, bd = r;
@@ -70,14 +73,19 @@
   T.nodeNear = nodeNear;
   function hit(e) {
     const b = [[e.point.x - 6, e.point.y - 6], [e.point.x + 6, e.point.y + 6]];
-    const f = map.queryRenderedFeatures(b, { layers: ['wdev', 'wl-line', 'm3d', 'nodes', 'house', 'house-num', 'cables', 'pipes'].filter(l => map.getLayer(l)) });
+    const f = map.queryRenderedFeatures(b, { layers: ['wdev', 'wl-line', 'm3d', 'nodes', 'spl-icon', 'house', 'house-num', 'cables', 'pipes'].filter(l => map.getLayer(l)) });
     const pick = ly => f.find(x => x.layer.id === ly);
     const wd = pick('wdev'); if (wd) return { kind: 'wdev', id: wd.properties.id };
     const wl = pick('wl-line'); if (wl) return { kind: 'wlink', id: wl.properties.id };
     const exact = map.getLayer('m3d') ? map.queryRenderedFeatures([e.point.x, e.point.y], { layers: ['m3d'] }) : [];
     const md = exact[0] || pick('m3d'); if (md) return md.properties.kind === 'house' ? { kind: 'bld', id: md.properties.mid } : { kind: 'node', id: md.properties.mid };
-    const nd = pick('nodes'); if (nd) return { kind: nd.properties.type === 'splice' ? 'splice' : 'node', id: nd.properties.id };
+    const at = ['nodes', 'house', 'house-num'].filter(l => map.getLayer(l)), under = map.queryRenderedFeatures([e.point.x, e.point.y], { layers: at });
+    const nodeHit = f0 => ({ kind: f0.properties.type === 'splice' ? 'splice' : 'node', id: f0.properties.id });
+    const onNode = under.find(x => x.layer.id === 'nodes'); if (onNode) return nodeHit(onNode);
+    const onHouse = under.find(x => x.layer.id === 'house' || x.layer.id === 'house-num'); if (onHouse) return { kind: 'bld', id: onHouse.properties.id };
+    const nd = pick('nodes'); if (nd) return nodeHit(nd);
     const hm = pick('house') || pick('house-num'); if (hm) return { kind: 'bld', id: hm.properties.id };
+    const badge = pick('spl-icon'); if (badge) return { kind: 'node', id: badge.properties.id };
     const cb = pick('cables'), pp = pick('pipes');
     if (cb && pp) { // pipe first, click again on the same spot -> cable
       if (T.sel && T.sel.kind === 'pipe' && T.sel.id === pp.properties.id) return { kind: 'cable', id: cb.properties.id };
@@ -140,7 +148,7 @@
       if (lay('impv-pt')) { const iv = map.queryRenderedFeatures(bx, { layers: ['impv-pt'] }); if (iv.length) { if (e.originalEvent.shiftKey) FT.imp.deleteVertex(iv[0].properties); return; } }
       if (lay('bh-pt') && map.queryRenderedFeatures(bx, { layers: ['bh-pt', 'bh-vtx'] }).length) return; // a click on a handle never changes the selection
       const h = hit(e); T.cycle++;
-      if (!h) { if (T.sel || T.multi) T.select(null); return; }
+      if (!h) { if (T.sel || T.multi) T.select(null); else if (FT.map.doneRing) { FT.map.setDone(null); U().hint(''); } return; }
       if (T.tooHigh()) { tooHighToast(); return; }
       if (e.originalEvent.shiftKey && h.kind === 'bld') { T.toggleBuilding(h.id); return; }
       if (e.originalEvent.shiftKey && (h.kind === 'node' || h.kind === 'pipe' || h.kind === 'cable')) { T.toggleMulti(h); return; }
@@ -296,9 +304,9 @@
   function finishShape(d) {
     let pts = d.pts.slice(); const rect = d.shape === 'rect';
     if (rect && pts.length >= 2) { const a = pts[0], b = pts[1]; pts = [a, [b[0], a[1]], b, [a[0], b[1]]]; }
-    if (d.kind === 'measure') { return; } // measure keeps showing; Esc clears
+    if (d.kind === 'measure') { if (pts.length < 2) return; const len = FT.pathLen(pts); T.draw = null; FT.map.setDraw([]); U().meter(null); FT.map.setDone(pts, pts.length < 3); U().hint(FT.fmtLen(len) + (pts.length >= 3 ? ' · ' + (FT.ringArea(pts) / 10000).toFixed(2) + ' ha' : '')); return; } // the result stays, in green, until Esc or the next action
     if (pts.length < 3) { U().toast(FT.t('toast_need2')); return; }
-    const tool = T.tool; T.draw = null; FT.map.setDraw([]); U().meter(null);
+    const tool = T.tool; T.draw = null; FT.map.setDraw([]); U().meter(null); U().refreshStatus(); if (tool !== 'bdraw') FT.map.setDone(pts);
     if (tool === 'area') { const m = T.collectIn(pts); if (!(m.nodes.size + m.pipes.size + m.cables.size) && m.houses.size) { const ids = [...m.houses]; T.multi = null; T.bsel = new Set(ids); T.sel = { kind: 'bld', id: ids[ids.length - 1] }; FT.map.setBuildingSelection(new Set(ids)); U().selectionChanged(); return; } T.selectMulti(m); return; }
     if (tool === 'shape' && T.shapeCB) { const cb = T.shapeCB; T.shapeCB = null; T.setTool('select'); cb(pts); return; }
     if (tool === 'dxfarea' && T.shapeCB) { const cb = T.shapeCB; T.shapeCB = null; T.setTool('select'); cb(pts); return; }
@@ -357,12 +365,7 @@
     const h = T.hit(e), b = h && h.kind === 'bld' ? h.id : null, S = FT.state, box = T.sel && T.sel.kind === 'node' ? S.nodes[T.sel.id] : null;
     if (!box || !box.ratio) { U().toast('Select an FDC / iFDC / FDB with a splitter ratio first'); return; }
     if (!b) { U().toast(FT.lang === 'ar' ? 'انقر على لوغو البيت' : 'Click a house icon'); return; }
-    const cap = parseInt(box.ratio.split(':')[1], 10), used = Object.values(S.subs).filter(s => s.node === box.id).length;
-    if (used >= cap) { U().toast('Splitter ' + box.ratio + ' is full (' + used + '/' + cap + ')'); return; }
-    const c = FT.map.housePoint(b).slice(); FT.commit(); S.seq.sub++;
-    const sub = { id: FT.uid('s'), name: 'ONT-' + S.seq.sub, node: box.id, bld: b, ll: c, port: used + 1 }; S.subs[sub.id] = sub; FT.houses.pin(b).st = 1;
-    const drop = FT.addCable([box.ll, c], box.id, box.id, 'dr2', 'free', [box.id, box.id], [[box.ll, c]]); drop.drop = sub.id; drop.name = 'Drop ' + sub.name; drop.sub = sub.id;
-    FT.changed('sub'); U().toast(sub.name + ' → ' + box.name + ' port ' + sub.port + '/' + cap);
+    FT.fui.openConnect(box.id, b); // pick the port; one step writes subscriber, drop cable and port fusion (js/subui.js)
   }
 
   // ---------------- keyboard ----------------

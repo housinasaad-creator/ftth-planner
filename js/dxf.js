@@ -33,7 +33,7 @@
   // ---- DXF text helpers ----
   // R2000 has no UTF-8: non-ASCII becomes \U+XXXX (AutoCAD and ezdxf both read this).
   function esc(s) {
-    s = String(s == null ? '' : s).replace(/[\r\n]+/g, ' ');
+    s = String(s == null ? '' : s).replace(/[\r\n]+/g, ' ').replace(/[\u00B7\u2013\u2014]/g, '-').replace(/\u00D7/g, 'x').replace(/\u2192/g, '->').replace(/[\u2066-\u2069]/g, '');
     let o = '';
     for (const ch of s) { const c = ch.codePointAt(0); o += c < 128 ? ch : '\\U+' + c.toString(16).toUpperCase().padStart(4, '0'); }
     return o;
@@ -42,55 +42,54 @@
   // AutoCAD Color Index for our layers
   const ACI = { red: 1, yellow: 2, green: 3, cyan: 4, blue: 5, magenta: 6, white: 7, grey: 8, orange: 30, lime: 80, brown: 34 };
 
-  function build(ents, layers, opt) {
-    opt = opt || {};
-    let h = 0x30; const H = () => (++h).toString(16).toUpperCase();
-    const out = []; const g = (c, v) => out.push(String(c), String(v));
-    // collect extents
+  // Entities: {layer, kind:'line'|'poly'|'circle'|'text'|'point'|'insert', pts:[[x,y]...], closed, r, text, h, rot, centred,
+  //            name, scale, attrs:{TAG: value}}. Everything is appended to the complete AutoCAD skeleton, so the file opens
+  //            and edits like a drawing made in AutoCAD: real layers, symbol blocks with attributes, polylines and text.
+  function build(ents) {
+    const T = FT.DXF_TEMPLATE; if (!T) throw new Error('DXF template missing');
+    let h = T.seed + 16; const H = () => (++h).toString(16).toUpperCase();
+    const known = new Set(T.layers.concat(['0']));
+    const out = []; const g = (c, v) => out.push(String(c).padStart(3, ' '), String(v));
     let x0 = 1e18, y0 = 1e18, x1 = -1e18, y1 = -1e18;
     ents.forEach(e => (e.pts || []).forEach(p => { x0 = Math.min(x0, p[0]); y0 = Math.min(y0, p[1]); x1 = Math.max(x1, p[0]); y1 = Math.max(y1, p[1]); }));
     if (x0 > x1) { x0 = y0 = 0; x1 = y1 = 100; }
-    g(0, 'SECTION'); g(2, 'HEADER');
-    g(9, '$ACADVER'); g(1, 'AC1015');
-    g(9, '$DWGCODEPAGE'); g(3, 'ANSI_1252');
-    g(9, '$INSBASE'); g(10, 0); g(20, 0); g(30, 0);
-    g(9, '$EXTMIN'); g(10, num(x0)); g(20, num(y0)); g(30, 0);
-    g(9, '$EXTMAX'); g(10, num(x1)); g(20, num(y1)); g(30, 0);
-    g(9, '$INSUNITS'); g(70, 6); // metres
-    g(9, '$MEASUREMENT'); g(70, 1);
-    g(0, 'ENDSEC');
-    g(0, 'SECTION'); g(2, 'TABLES');
-    g(0, 'TABLE'); g(2, 'LTYPE'); g(5, '5'); g(100, 'AcDbSymbolTable'); g(70, 2);
-    g(0, 'LTYPE'); g(5, '14'); g(100, 'AcDbSymbolTableRecord'); g(100, 'AcDbLinetypeTableRecord'); g(2, 'CONTINUOUS'); g(70, 0); g(3, 'Solid line'); g(72, 65); g(73, 0); g(40, 0);
-    g(0, 'LTYPE'); g(5, '15'); g(100, 'AcDbSymbolTableRecord'); g(100, 'AcDbLinetypeTableRecord'); g(2, 'DASHED'); g(70, 0); g(3, 'Dashed __ __ __'); g(72, 65); g(73, 2); g(40, 1.0); g(49, 0.6); g(74, 0); g(49, -0.4); g(74, 0);
-    g(0, 'ENDTAB');
-    g(0, 'TABLE'); g(2, 'LAYER'); g(5, '2'); g(100, 'AcDbSymbolTable'); g(70, layers.length + 1);
-    const allL = [{ name: '0', color: 7 }].concat(layers);
-    allL.forEach(l => { g(0, 'LAYER'); g(5, H()); g(100, 'AcDbSymbolTableRecord'); g(100, 'AcDbLayerTableRecord'); g(2, esc(l.name)); g(70, 0); g(62, l.color || 7); g(6, l.ltype || 'CONTINUOUS'); });
-    g(0, 'ENDTAB');
-    g(0, 'TABLE'); g(2, 'STYLE'); g(5, '3'); g(100, 'AcDbSymbolTable'); g(70, 1);
-    g(0, 'STYLE'); g(5, H()); g(100, 'AcDbSymbolTableRecord'); g(100, 'AcDbTextStyleTableRecord'); g(2, 'STANDARD'); g(70, 0); g(40, 0); g(41, 1); g(50, 0); g(71, 0); g(42, 2.5); g(3, 'txt'); g(4, '');
-    g(0, 'ENDTAB');
-    g(0, 'ENDSEC');
-    g(0, 'SECTION'); g(2, 'ENTITIES');
+    const begin = (type, owner, layer, color) => { const id = H(); g(0, type); g(5, id); g(330, owner); g(100, 'AcDbEntity'); g(8, known.has(layer) ? layer : '0'); if (color) g(62, color); return id; };
+    const xyz = (p, c) => { g(c || 10, num(p[0])); g((c || 10) + 10, num(p[1])); g((c || 10) + 20, 0); };
+    const textBody = (e, str) => { g(100, 'AcDbText'); xyz(e.pts[0]); g(40, num(e.h || 2.5)); g(1, esc(str)); if (e.rot) g(50, num(e.rot)); g(7, 'FTTH'); if (e.centred) { g(72, 1); xyz(e.pts[0], 11); } };
     ents.forEach(e => {
-      const base = () => { g(0, e.k); g(5, H()); g(100, 'AcDbEntity'); g(8, esc(e.layer || '0')); if (e.color) g(62, e.color); };
-      if (e.kind === 'line' && e.pts.length === 2) {
-        e.k = 'LINE'; base(); g(100, 'AcDbLine'); g(10, num(e.pts[0][0])); g(20, num(e.pts[0][1])); g(30, 0); g(11, num(e.pts[1][0])); g(21, num(e.pts[1][1])); g(31, 0);
+      const L = e.layer || '0';
+      if (e.kind === 'insert') {
+        const defs = T.blocks[e.name]; if (!defs) return;
+        const k = e.scale || 1, rot = (e.rot || 0) * Math.PI / 180, attrs = defs.filter(d => !(e.noAttrs));
+        const id = begin('INSERT', T.owner, L, e.color); g(100, 'AcDbBlockReference'); if (attrs.length) g(66, 1); g(2, e.name); xyz(e.pts[0]); if (k !== 1) { g(41, num(k)); g(42, num(k)); g(43, num(k)); } if (e.rot) g(50, num(e.rot));
+        if (!attrs.length) return;
+        attrs.forEach(d => {
+          const p = [e.pts[0][0] + k * (d.x * Math.cos(rot) - d.y * Math.sin(rot)), e.pts[0][1] + k * (d.x * Math.sin(rot) + d.y * Math.cos(rot))];
+          const val = e.attrs && e.attrs[d.tag] != null ? e.attrs[d.tag] : '';
+          const AL = (e.attrLayers && e.attrLayers[d.tag]) || L; begin('ATTRIB', id, AL); g(100, 'AcDbText'); xyz(p); g(40, num(d.h * k)); g(1, esc(val)); if (e.rot) g(50, num(e.rot)); g(7, 'FTTH'); if (d.centred) { g(72, 1); xyz(p, 11); }
+          g(100, 'AcDbAttribute'); g(2, d.tag); g(70, d.hidden ? 1 : 0); if (d.centred) g(74, 2);
+        });
+        begin('SEQEND', id, L);
+      } else if (e.kind === 'line' && e.pts.length === 2) {
+        begin('LINE', T.owner, L, e.color); g(100, 'AcDbLine'); xyz(e.pts[0]); xyz(e.pts[1], 11);
       } else if (e.kind === 'poly' || e.kind === 'line') {
         if (e.pts.length < 2) return;
-        e.k = 'LWPOLYLINE'; base(); g(100, 'AcDbPolyline'); g(90, e.pts.length); g(70, e.closed ? 1 : 0);
+        begin('LWPOLYLINE', T.owner, L, e.color); g(100, 'AcDbPolyline'); g(90, e.pts.length); g(70, e.closed ? 1 : 0); if (e.width) g(43, num(e.width));
         e.pts.forEach(p => { g(10, num(p[0])); g(20, num(p[1])); });
       } else if (e.kind === 'circle') {
-        e.k = 'CIRCLE'; base(); g(100, 'AcDbCircle'); g(10, num(e.pts[0][0])); g(20, num(e.pts[0][1])); g(30, 0); g(40, num(e.r || 1));
+        begin('CIRCLE', T.owner, L, e.color); g(100, 'AcDbCircle'); xyz(e.pts[0]); g(40, num(e.r || 1));
       } else if (e.kind === 'point') {
-        e.k = 'POINT'; base(); g(100, 'AcDbPoint'); g(10, num(e.pts[0][0])); g(20, num(e.pts[0][1])); g(30, 0);
+        begin('POINT', T.owner, L, e.color); g(100, 'AcDbPoint'); xyz(e.pts[0]);
       } else if (e.kind === 'text') {
-        e.k = 'TEXT'; base(); g(100, 'AcDbText'); g(10, num(e.pts[0][0])); g(20, num(e.pts[0][1])); g(30, 0); g(40, num(e.h || 2.5)); g(1, esc(e.text)); g(50, num(e.rot || 0)); g(7, 'STANDARD'); g(100, 'AcDbText');
+        if (!String(e.text == null ? '' : e.text).length) return;
+        begin('TEXT', T.owner, L, e.color); textBody(e, e.text); g(100, 'AcDbText'); if (e.centred) g(73, 2);
       }
     });
-    g(0, 'ENDSEC'); g(0, 'EOF');
-    return out.join('\r\n') + '\r\n';
+    const fill = str => str.split('{{SEED}}').join((h + 32).toString(16).toUpperCase())
+      .split('{{X0}}').join(num(x0)).split('{{Y0}}').join(num(y0)).split('{{X1}}').join(num(x1)).split('{{Y1}}').join(num(y1))
+      .split('{{VX}}').join(num((x0 + x1) / 2)).split('{{VY}}').join(num((y0 + y1) / 2)).split('{{VH}}').join(num(Math.max(y1 - y0, (x1 - x0) * 0.6, 50) * 1.08));
+    const text = fill(T.head) + (out.length ? out.join('\n') + '\n' : '') + fill(T.tail);
+    return text.replace(/\r\n/g, '\n').replace(/\n/g, '\r\n');
   }
   FT.dxf = { build, utm, fromUtm, zoneOf, ACI, esc };
 })(typeof window !== 'undefined' ? window : globalThis);

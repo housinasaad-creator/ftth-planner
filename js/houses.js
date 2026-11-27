@@ -34,9 +34,16 @@
     return cv;
   };
   H.PLATE_LIFT = 17; // css px (at icon size 1) the house is raised when it carries a number
+  H.HALO = 7; // css px the halo reaches beyond the icon on every side
+  // an oval around the icon of n floors; its own centre is the icon's centre (coloured by the map layer)
+  H.halo = function (n, ratio) {
+    const M = H.metrics(n), pad = 3, g = H.HALO, W = M.w + 2 * pad + 2 * g, Hh = M.roof + M.body + 2 * pad + 2 * g, cv = document.createElement('canvas'); cv.width = Math.ceil(W * ratio); cv.height = Math.ceil(Hh * ratio);
+    const c = cv.getContext('2d'); c.scale(ratio, ratio); c.fillStyle = '#ffffff'; c.beginPath(); c.ellipse(W / 2, Hh / 2, W / 2 - 1, Hh / 2 - 1, 0, 0, Math.PI * 2); c.fill();
+    return cv;
+  };
   H.addImages = function (map) {
     if (!map.hasImage('house-plate')) { const r = 3, cv = H.plate(r); map.addImage('house-plate', cv.getContext('2d').getImageData(0, 0, cv.width, cv.height), { pixelRatio: r, stretchX: [[6 * r, 14 * r]], stretchY: [[6 * r, 10 * r]], content: [3 * r, 4 * r, 17 * r, 13 * r] }); }
-    for (let n = 1; n <= H.MAX_FLOORS; n++) { if (map.hasImage('house-' + n)) continue; const cv = H.draw(n, 3); map.addImage('house-' + n, cv.getContext('2d').getImageData(0, 0, cv.width, cv.height), { pixelRatio: 3 }); }
+    for (let n = 1; n <= H.MAX_FLOORS; n++) { if (!map.hasImage('halo-' + n)) { const hv = H.halo(n, 3); map.addImage('halo-' + n, hv.getContext('2d').getImageData(0, 0, hv.width, hv.height), { pixelRatio: 3, sdf: true }); } if (map.hasImage('house-' + n)) continue; const cv = H.draw(n, 3); map.addImage('house-' + n, cv.getContext('2d').getImageData(0, 0, cv.width, cv.height), { pixelRatio: 3 }); }
   };
 
   // ---------------- where the house stands ----------------
@@ -80,8 +87,8 @@
     else if (n.type === 'dk') { post(2.8, 0.3); box(1.35, 2.8, 5.0); }
     else if (n.type === 'bk') { post(2.4); box(0.95, 2.4, 3.9); }
     else if (n.type === 'pole') { post(3.4); box(0.55, 3.4, 4.2); }
-    else if (n.type === 'mh') { slab(out, 'node', n.id, p, 1.3, 0, 0.35, '#6b7280'); slab(out, 'node', n.id, p, 0.75, 0.35, 0.5, '#2f3545'); }
-    else { slab(out, 'node', n.id, p, 0.8, 0, 0.28, '#cfd6ea'); slab(out, 'node', n.id, p, 0.45, 0.28, 0.38, '#2f3545'); }
+    else if (n.type === 'mh') { const dk = FT.map && FT.map.theme === 'dark'; slab(out, 'node', n.id, p, 1.3, 0, 0.35, dk ? '#eef1f8' : '#6b7280'); slab(out, 'node', n.id, p, 0.75, 0.35, 0.5, dk ? '#aab3c5' : '#2f3545'); }
+    else { const dk = FT.map && FT.map.theme === 'dark'; slab(out, 'node', n.id, p, 0.8, 0, 0.28, dk ? '#ffffff' : '#cfd6ea'); slab(out, 'node', n.id, p, 0.45, 0.28, 0.38, dk ? '#aab3c5' : '#2f3545'); }
     if (lift) for (let i = first; i < out.length; i++) { out[i].properties.b = +(out[i].properties.b + lift).toFixed(2); out[i].properties.h = +(out[i].properties.h + lift).toFixed(2); }
   };
   // the box of a house is drawn just beside the house icon (3.8 m south of it), so the two read as one thing

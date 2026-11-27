@@ -117,7 +117,7 @@
       if (n.endsWith('.kmz')) I.add(f.name, I.parseKml(await unzipFirst(await f.arrayBuffer(), '.kml')));
       else if (n.endsWith('.kml')) I.add(f.name, I.parseKml(await f.text()));
       else if (n.endsWith('.dxf')) I.add(f.name, I.parseDxf(await f.text(), crs || 'utm37'));
-      else { const j = JSON.parse(await f.text()); if (j.nodes && j.pipes) { FT.commit(); FT.setState(j); U().toast(FT.t('toast_saved')); return; } const fs = j.type === 'FeatureCollection' ? j.features : j.type === 'Feature' ? [j] : []; I.add(f.name, fs.filter(x => x.geometry)); }
+      else { const j = JSON.parse(await f.text()); if (j.nodes && j.pipes) { const go = () => { FT.commit(); FT.setState(j); U().toast(FT.t('toast_saved')); }; return FT.cloud ? FT.cloud.guardLoad(f, go) : go(); } const fs = j.type === 'FeatureCollection' ? j.features : j.type === 'Feature' ? [j] : []; I.add(f.name, fs.filter(x => x.geometry)); }
     } catch (e) { U().toast('Import failed: ' + e.message); }
   };
 })(window);

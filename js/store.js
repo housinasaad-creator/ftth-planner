@@ -49,9 +49,10 @@
     return true;
   };
   // ---------------- a project that lives only in this browser -> the cloud ----------------
+  S.fingerprint = s => fingerprint(s);
   S.isLocal = () => !!(S.cur && S.cur.key === 'local');
   const sorted = o => Array.isArray(o) ? o.map(sorted) : (o && typeof o === 'object' ? Object.keys(o).sort().reduce((a, k) => (a[k] = sorted(o[k]), a), {}) : o); // the database does not keep key order
-  const fingerprint = s => JSON.stringify(sorted(['nodes', 'pipes', 'cables', 'splices', 'bld', 'subs', 'folders', 'fmap', 'wdev', 'wlinks', 'imports'].map(k => (s && s[k]) || {})));
+  const fingerprint = s => JSON.stringify(sorted(['nodes', 'pipes', 'cables', 'splices', 'bld', 'subs', 'folders', 'fmap', 'wdev', 'wlinks', 'imports', 'cfg'].map(k => (s && s[k]) || {})));
   S.upload = async function () {
     if (!S.isLocal()) return { ok: false, why: 'not-local' };
     const old = S.cur.id, st = FT.state; st.meta = st.meta || {}; const name = st.meta.name || S.cur.name || 'Homs', type = st.meta.type || S.cur.type || 'gpon';

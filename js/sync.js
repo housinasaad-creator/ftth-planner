@@ -6,7 +6,7 @@
   const FT = G.FT = G.FT || {};
   const Y = FT.sync = { active: false, peers: [], rev: 0, mode: 'edit', online: true, POLL: 1500, HIDDEN_POLL: 6000, BATCH: 1500 };
   const SEP = '\u0001';
-  const OBJ = ['nodes', 'pipes', 'cables', 'splices', 'bld', 'subs', 'wdev', 'wlinks', 'imports', 'folders', 'users'];
+  const OBJ = ['nodes', 'pipes', 'cables', 'splices', 'bld', 'subs', 'wdev', 'wlinks', 'imports', 'folders', 'users', 'cfg'];
   const FOLD = { nodes: 'n:', pipes: 'p:', cables: 'c:', splices: 's:' }; // the tree folder travels with its element
   const jget = (k, d) => { try { return JSON.parse(localStorage.getItem(k)) || d; } catch (e) { return d; } };
   const jset = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch (e) { return false; } };
@@ -15,6 +15,10 @@
   let pullT = 0, pushT = 0, scanT = 0, safetyT = 0, pushing = false, pulling = false, scanning = false, scanAgain = false, fails = 0, qT = 0;
   const client = Math.random().toString(36).slice(2, 12);
   Y.client = client;
+
+  // the server accepts a fixed list of collections: project settings travel inside 'ord' as 'cfg.<key>'
+  const toWire = (c, i) => c === 'cfg' ? ['ord', 'cfg.' + i] : [c, i];
+  const fromWire = ch => ch.c === 'ord' && String(ch.i).indexOf('cfg.') === 0 ? Object.assign({}, ch, { c: 'cfg', i: String(ch.i).slice(4) }) : ch;
 
   // ---------------- state <-> items ----------------
   function payload(coll, id) {
@@ -80,7 +84,7 @@
   async function push() {
     if (!cur || Y.mode !== 'edit' || pushing || !queue.size) return; pushing = true; const g = gen, sent = []; let size = 0;
     for (const [k, v] of queue) { sent.push([k, v]); size += v ? v.length : 8; if (sent.length >= Y.BATCH || size > 3000000) break; }
-    const ops = sent.map(([k, v]) => { const [c, i] = split(k); return { c, i, d: v === null ? null : JSON.parse(v) }; });
+    const ops = sent.map(([k, v]) => { const [c, i] = toWire(...split(k)); return { c, i, d: v === null ? null : JSON.parse(v) }; });
     try {
       await FT.store.rpc('ftth_push', { p_id: cur.id, p_key: cur.key, p_client: client, p_ops: ops });
       if (g !== gen) return;
@@ -94,7 +98,8 @@
   // ---------------- receive ----------------
   function apply(changes, initial) {
     const done = [], fresh = []; let bld = false;
-    for (const ch of changes) {
+    for (const wire of changes) {
+      const ch = fromWire(wire);
       if (!initial && ch.k === client) continue; // my own echo
       const key = ch.c + SEP + ch.i;
       if (!initial) { if (Y.mode === 'edit') note(key); if (queue.has(key)) continue; } // I changed it too and have not sent it yet: mine goes out after theirs

@@ -67,6 +67,7 @@
     if (T().multi && s.houses.length) { T().deleteSelection(); FT.bedit.remove(s.houses, true); FT.changed('bld'); } else T().deleteSelection();
     U().toast(tx('قُصّ · Ctrl+V للّصق مكان الماوس', 'Cut · Ctrl+V pastes at the mouse'));
   };
+  K.pasteInPlace = function () { let c = clip; try { c = JSON.parse(localStorage.getItem('ft_clip')) || clip; } catch (e) { } K.paste(c && c.anchor ? c.anchor.slice() : undefined); }; // same coordinates as copied (also from another project)
   K.duplicate = function () {
     const keep = clip, s = selected(); if (!count(s)) { U().toast(tx('ما في شي محدّد', 'Nothing selected')); return; }
     let saved = null; try { saved = localStorage.getItem('ft_clip'); } catch (e) { }
@@ -111,7 +112,7 @@
       if ((c === 'KeyC' || c === 'KeyX') && String(G.getSelection ? G.getSelection() : '')) return; // text marked on the page: normal copy
       if (c === 'KeyC') { stop(); K.copy(); return; }
       if (c === 'KeyX') { stop(); K.cut(); return; }
-      if (c === 'KeyV') { stop(); K.paste(); return; }
+      if (c === 'KeyV') { stop(); if (ev.shiftKey) K.pasteInPlace(); else K.paste(); return; }
       if (c === 'KeyD') { stop(); K.duplicate(); return; }
       if (c === 'KeyA') { stop(); K.selectAll(ev.shiftKey); return; }
       if (c === 'KeyS') { stop(); FT.store.saveNow(); if (FT.sync && FT.sync.active) FT.sync.flush(); U().toast(tx('حُفظ', 'Saved')); return; }
@@ -176,7 +177,7 @@
   K.helpRows = function () {
     const t = FT.t;
     return [
-      [tx('الأساسية', 'Basics'), [['Ctrl+C', tx('نسخ المحدّد', 'Copy selection')], ['Ctrl+X', tx('قص', 'Cut')], ['Ctrl+V', tx('لصق مكان الماوس', 'Paste at the mouse')], ['Ctrl+D', tx('تكرار', 'Duplicate')], ['Ctrl+Z', tx('تراجع', 'Undo')], ['Ctrl+Y · Ctrl+Shift+Z', tx('إعادة', 'Redo')], ['Ctrl+A', tx('تحديد كل الشبكة', 'Select the whole network')], ['Ctrl+Shift+A', tx('تحديد كل البيوت الظاهرة', 'Select all houses in view')], ['Delete · Backspace', tx('حذف المحدّد', 'Delete selection')], ['Ctrl+S', tx('حفظ', 'Save')], ['Esc', tx('إلغاء / إغلاق', 'Cancel / close')], ['Enter', tx('إنهاء الرسم', 'Finish drawing')]]],
+      [tx('الأساسية', 'Basics'), [['Ctrl+C', tx('نسخ المحدّد', 'Copy selection')], ['Ctrl+X', tx('قص', 'Cut')], ['Ctrl+Shift+V', tx('لصق بنفس المكان', 'Paste in place')], ['Ctrl+V', tx('لصق مكان الماوس', 'Paste at the mouse')], ['Ctrl+D', tx('تكرار', 'Duplicate')], ['Ctrl+Z', tx('تراجع', 'Undo')], ['Ctrl+Y · Ctrl+Shift+Z', tx('إعادة', 'Redo')], ['Ctrl+A', tx('تحديد كل الشبكة', 'Select the whole network')], ['Ctrl+Shift+A', tx('تحديد كل البيوت الظاهرة', 'Select all houses in view')], ['Delete · Backspace', tx('حذف المحدّد', 'Delete selection')], ['Ctrl+S', tx('حفظ', 'Save')], ['Esc', tx('إلغاء / إغلاق', 'Cancel / close')], ['Enter', tx('إنهاء الرسم', 'Finish drawing')]]],
       [tx('التحريك', 'Moving'), [['← ↑ → ↓', tx('تحريك المحدّد متراً واحداً', 'Move selection by 1 m')], ['Shift + ← ↑ → ↓', tx('تحريك المحدّد 10 أمتار', 'Move selection by 10 m')], ['Shift+M', tx('نقل البيت أو العنصر بنقرة', 'Move house / element with one click')], ['F', tx('الذهاب إلى المحدّد', 'Zoom to selection')], ['Shift+F', tx('عرض كل المشروع', 'Show whole project')], ['H', tx('إخفاء المحدّد', 'Hide selection')], ['Shift+H', tx('إظهار كل المخفي', 'Show everything hidden')]]],
       [tx('الأدوات', 'Tools'), Object.keys(K.TOOLS).map(id => [K.TOOLS[id], t('t_' + id)])],
       [tx('الخريطة والعرض', 'Map and view'), [['Alt+1', t('b_map')], ['Alt+2', t('b_3d')], ['Alt+3', t('b_sat')], ['Shift+B', t('b_hide')], ['Shift+A', t('b_hidehouses')], ['Shift+N', t('b_hidenet')], ['Ctrl+B', tx('لوحة الطبقات', 'Layers panel')], ['Ctrl+I', tx('اللوحة اليمنى', 'Right panel')], ['Ctrl+F', tx('بحث في الطبقات', 'Search layers')]]],

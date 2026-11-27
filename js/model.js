@@ -108,7 +108,7 @@
   };
 
   // ---------------- state ----------------
-  FT.blank = () => ({ v: 3, meta: { name: '', created: Date.now() }, nodes: {}, pipes: {}, cables: {}, splices: {}, bld: {}, subs: {}, wdev: {}, wlinks: {}, imports: {}, users: {}, ord: {}, seq: { olt: 0, sk: 0, dk: 0, bk: 0, mh: 0, hh: 0, pole: 0, pipe: 0, cable: 0, splice: 0, sub: 0, design: 0, wdev: 0, wlink: 0 }, folders: {}, ui: { ratio: { sk: '', dk: '', bk: '' } } });
+  FT.blank = () => ({ v: 3, meta: { name: '', created: Date.now() }, nodes: {}, pipes: {}, cables: {}, splices: {}, bld: {}, subs: {}, wdev: {}, wlinks: {}, imports: {}, users: {}, cfg: {}, ord: {}, seq: { olt: 0, sk: 0, dk: 0, bk: 0, mh: 0, hh: 0, pole: 0, pipe: 0, cable: 0, splice: 0, sub: 0, design: 0, wdev: 0, wlink: 0 }, folders: {}, ui: { ratio: { sk: '', dk: '', bk: '' } } });
   FT.state = FT.blank();
   FT.listeners = [];
   FT.onChange = fn => FT.listeners.push(fn);
@@ -118,7 +118,7 @@
   FT.commit = function (reason) { // call BEFORE mutating
     undo.push(entry()); if (undo.length > 80) undo.shift(); redo = [];
   };
-  const UNDO_COLLS = ['nodes', 'pipes', 'cables', 'splices', 'bld', 'subs', 'wdev', 'wlinks', 'imports', 'folders', 'fmap'];
+  const UNDO_COLLS = ['nodes', 'pipes', 'cables', 'splices', 'bld', 'subs', 'wdev', 'wlinks', 'imports', 'folders', 'fmap', 'cfg'];
   function restore(e) {
     const old = JSON.parse(e.s); if (!FT.team) { FT.state = old; return; }
     // team project: put back only what I changed, item by item (never the teammates' work, never the shared number counters)
@@ -174,6 +174,8 @@
     S.cables[c.id] = c; return c;
   };
   FT.nodeById = id => FT.state.nodes[id];
+  // joins inside a cabinet, a building box or the OLT rack need no extra enclosure; only joins in a chamber or on a wall point do
+  FT.isClosure = sp => { const n = FT.state.nodes[sp.node]; return !!n && (n.type === 'mh' || n.type === 'hh' || n.type === 'pole'); };
   let pipeIdx = null, pipeIdxFor = null;
   FT.pipeBetween = (a, b) => { // indexed (rebuilt when the pipes object or their number changes; FT.changed also drops it)
     const P = FT.state.pipes;
@@ -203,9 +205,12 @@
     Object.values(S.cables).forEach(c => { if (!c.nodes.includes(id)) return; const i = c.nodes.indexOf(id);
       if (chamber && c.shared && c.segs && i > 0 && i < c.nodes.length - 1) { c.segs.splice(i - 1, 2, c.segs[i - 1].concat(c.segs[i].slice(1))); c.nodes.splice(i, 1); } else delete S.cables[c.id]; });
     Object.values(S.splices).forEach(s => { if (s.node === id) delete S.splices[s.id]; });
+    Object.values(S.subs).forEach(s => { if (s.node === id) { delete S.subs[s.id]; Object.values(S.cables).forEach(c => { if (c.sub === s.id) delete S.cables[c.id]; }); } });
+    FT.fiber && FT.fiber.prune();
   };
   FT.deletePipe = id => { delete FT.state.pipes[id]; pipeIdx = null; };
-  FT.deleteCable = id => { delete FT.state.cables[id]; Object.values(FT.state.splices).forEach(s => { if (s.inCable === id) s.inCable = ''; if (s.outCable === id) s.outCable = ''; }); };
+  // a deleted cable takes its joins with it, and a deleted drop takes its subscriber (undo brings all of it back)
+  FT.deleteCable = id => { const c = FT.state.cables[id]; delete FT.state.cables[id]; if (c && c.sub) delete FT.state.subs[c.sub]; FT.fiber && FT.fiber.prune(); };
 
   // ---------------- material prices (USD) and automatic costing ----------------
   // Defaults are rough market estimates so the first project is not empty; the user edits them to the real supplier prices.
@@ -233,7 +238,7 @@
     const NN = { olt: 'OLT', sk: 'FDC cabinet', dk: 'iFDC cabinet', bk: 'FDB box', mh: 'MH manhole', hh: 'HH handhole', pole: 'WA wall anchor' };
     Object.keys(nod).forEach(t => add('node', NN[t] || t, nod[t], 'pc', P.node[t] || 0));
     Object.keys(spl).forEach(r => add('splitter', 'Splitter ' + r, spl[r], 'pc', P.splitter[r] || 0));
-    add('splice', 'Splice closure', Object.values(S.splices).filter(s => inS('nodes', s.node)).length, 'pc', P.splice);
+    add('splice', 'Splice closure', Object.values(S.splices).filter(s => inS('nodes', s.node) && FT.isClosure(s)).length, 'pc', P.splice);
     const wd = {}; Object.values(scope ? {} : (S.wdev || {})).forEach(d => { wd[d.type] = (wd[d.type] || 0) + 1; }); Object.keys(wd).forEach(t => add('wdev', t.toUpperCase() + ' radio', wd[t], 'pc', P.wdev[t] || 0));
     const pm = runM, cm = Object.values(cab).reduce((a, b) => a + b, 0);
     add('labour', 'Pipe installation', pm, 'm', P.labour.pipe_m); add('labour', 'Cable installation', cm, 'm', P.labour.cable_m);
@@ -250,7 +255,7 @@
     Object.entries(cab).forEach(([k, v]) => rows.push({ kind: 'cable', name: k, qty: v.n, len: v.len }));
     Object.entries(pip).forEach(([k, v]) => rows.push({ kind: 'pipe', name: k, qty: v.n, len: v.len }));
     Object.entries(nod).forEach(([k, v]) => rows.push({ kind: 'node', name: k, qty: v }));
-    rows.push({ kind: 'splice', name: 'Splice closure', qty: Object.values(S.splices).filter(s => inScope('nodes', s.node)).length });
+    rows.push({ kind: 'splice', name: 'Splice closure', qty: Object.values(S.splices).filter(s => inScope('nodes', s.node) && FT.isClosure(s)).length });
     return rows;
   };
 })(typeof window !== 'undefined' ? window : globalThis);
