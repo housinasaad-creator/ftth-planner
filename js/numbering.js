@@ -27,7 +27,7 @@
   };
   N.clickFloors = function (e, p) {
     const h = FT.T.hit(e); const id = h && h.kind === 'bld' ? h.id : null; if (!id) return;
-    const fl = FT.T.opt && FT.T.opt.floors || U().floorsValue(); FT.commit(); FT.houses.pin(id).floors = fl; FT.changed('floors'); FT.T.select('bld', id);
+    const fl = FT.T.opt && FT.T.opt.floors || U().floorsValue(); FT.commit(); const b = FT.houses.pin(id); b.floors = fl; if (FT.T.opt && FT.T.opt.flats > 0) b.flats = FT.T.opt.flats; FT.changed('floors'); FT.T.select('bld', id);
   };
   N.addBuilding = function (ring) {
     FT.commit(); const id = 'u' + FT.uid('').slice(0, 7); const b = ensure(id); b.fp = ring; b.floors = U().floorsValue(); b.custom = 1;

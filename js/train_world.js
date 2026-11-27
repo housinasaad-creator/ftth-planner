@@ -44,7 +44,7 @@
   W.lotOutline = which => { const r = which === 1 ? rect(18, -17, HW, HH).map(p => ll(p[0], p[1])) : P.lot2ring; return r.concat([r[0]]); };
 
   W.state = function () {
-    const st = FT.blank(); st.meta = { name: FT.lang === 'en' ? 'Training project' : 'مشروع التدريب', type: 'gpon', created: Date.now() };
+    const st = FT.blank(); st.meta = { name: FT.lang === 'en' ? 'Training project' : 'مشروع التدريب', type: 'gpon', created: Date.now() }; st.cfg = Object.assign(st.cfg || {}, { homes: { perFloor: 1, boxPorts: 16 } });
     HOUSES.forEach(([k, x, y]) => { st.bld['tr_' + k] = { custom: 1, fp: rect(x, y, HW, HH).map(p => ll(p[0], p[1])), pt: W.house[k].ll.slice(), floors: FLOORS[k] || 2 }; });
     return st;
   };

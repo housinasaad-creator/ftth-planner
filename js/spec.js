@@ -1,10 +1,9 @@
 /* Syrian Telecom (ST) FTTH micro-trenching specification: optical budget along the real cable graph, compliance check (SOC),
-   official codes (F01-PS01-P01-D01-FDB01). Every number comes from FT.LIMITS / FT.BASE_LOSS / FT.SPLITTER_LOSS (model.js). */
+   official codes (F01-PS01-P01-D01-FDB01). Limits come from FT.LIMITS (model.js); every loss comes from the one rule in fiber.js. */
 (function (G) {
   'use strict';
   const FT = G.FT = G.FT || {};
   const SP = FT.spec = {};
-  const DROP_M = 100; // assumed drop length to the ONT (the drop itself is ST's work)
   const ar = () => FT.lang === 'ar';
   const ratioN = r => r ? (parseInt(String(r).split(':')[1], 10) || 1) : 1;
   const pad = (n, w) => String(n).padStart(w || 2, '0');
@@ -26,12 +25,11 @@
   SP.pathTo = (t, id) => { const p = []; let c = id; while (c != null) { p.unshift(c); const pv = t.prev[c]; c = pv ? pv[0] : null; } return p; };
 
   // ---------------- optical budget ----------------
+  const fromBudget = b => ({ loss: b.worstLoss, km: b.km, conn: b.connectors, spl: b.fusions, rx: b.down.rx, strong: b.tooStrong });
   SP.metrics = function (path, lenM) {
-    const S = FT.state, B = FT.BASE_LOSS; let split = 1, stages = 0, loss = 0, boxes = 0, holes = 0; const ratios = [];
-    path.forEach(id => { const n = S.nodes[id]; if (!n) return; if (FT.BOX_TYPES.includes(n.type)) boxes++; if (n.type === 'mh' || n.type === 'hh') holes++; if (n.ratio) { split *= ratioN(n.ratio); stages++; loss += FT.SPLITTER_LOSS[n.ratio] || 0; ratios.push(n.ratio); } });
-    const km = (lenM + DROP_M) / 1000, conn = 2 + 2 * boxes, spl = 2 * boxes + holes;
-    loss += km * B.fiber1490 + conn * B.connector + spl * B.splice;
-    return { split, stages, loss, km, ratios, conn, spl, rx: B.txDbm - loss };
+    const S = FT.state; let split = 1, stages = 0; const ratios = [];
+    path.forEach(id => { const n = S.nodes[id]; if (n && n.ratio) { split *= ratioN(n.ratio); stages++; ratios.push(n.ratio); } });
+    return Object.assign({ split, stages, ratios }, fromBudget(FT.fiber.estimate(path, lenM)));
   };
   // one row per FDB: the path from the nearest OLT, split ratio, stages and total loss
   SP.analyze = function () {
@@ -41,6 +39,8 @@
       if (!best) { rows.push({ node: n, fed: false }); return; }
       const path = SP.pathTo(best.t, n.id); rows.push(Object.assign({ node: n, fed: true, olt: best.olt, path, len: best.len }, SP.metrics(path, best.len)));
     });
+    // a spliced box shows exactly what its fibre trace shows
+    const walked = FT.fiber.boxBudgets(); rows.forEach(r => { if (r.fed && walked[r.node.id]) Object.assign(r, fromBudget(walked[r.node.id])); });
     return rows;
   };
 
@@ -60,6 +60,15 @@
     return n;
   };
 
+  // splitter outputs against flats, building by building (only buildings that have their box)
+  SP.capacity = function () {
+    const S = FT.state, by = {};
+    Object.values(S.nodes).filter(n => n.type === 'bk' && n.bld).forEach(n => { (by[n.bld] = by[n.bld] || []).push(n); });
+    Object.keys(S.bld).forEach(id => { const o = S.bld[id], n = o.fdb && S.nodes[o.fdb]; if (n && !(by[id] || []).includes(n)) (by[id] = by[id] || []).push(n); });
+    return Object.keys(by).filter(id => !(S.bld[id] || {}).deleted).map(id => { const o = S.bld[id] || {}; return { id, flats: FT.houses.homesOf(o), known: o.flats > 0, fdb: by[id][0].id, boxes: by[id].length, ports: by[id].reduce((a, n) => a + FT.fiber.splittersOf(n.id).reduce((x, p) => x + p.n, 0), 0) }; })
+      .sort((a, b) => (a.ports - a.flats) - (b.ports - b.flats));
+  };
+
   // ---------------- compliance (SOC) ----------------
   // status: ok | bad | warn | na
   SP.soc = function () {
@@ -74,7 +83,14 @@
         bad.length ? bad.length + ' FDB over the limit (worst 1:' + worst + ')' + (legacy.length ? ' — ' + legacy.length + ' splitter(s) 1:32 not allowed' : '') : none.length ? none.length + ' FDB with no splitter on its path (set the splitter ratio)' : 'worst 1:' + worst + ' over ' + fed.length + ' FDB', bad.map(r => r.node.id)); }
     // 2 loss
     if (!fed.length) add('loss', 'الفقد الكلي عند الـ ONT ≤ 28 dB', 'Total loss at the ONT ≤ 28 dB', 'na', '—', '—');
-    else { const bad = fed.filter(r => r.loss > L.maxLoss), mx = Math.max(...fed.map(r => r.loss)); add('loss', 'الفقد الكلي عند الـ ONT ≤ 28 dB', 'Total loss at the ONT ≤ 28 dB', bad.length ? 'bad' : mx > L.maxLoss - 2 ? 'warn' : 'ok', 'الأسوأ ' + mx.toFixed(1) + ' dB' + (bad.length ? ' — ' + bad.length + ' علبة تتجاوز' : ''), 'worst ' + mx.toFixed(1) + ' dB' + (bad.length ? ' — ' + bad.length + ' FDB over' : ''), bad.map(r => r.node.id)); }
+    else { const bad = fed.filter(r => r.loss > L.maxLoss), mx = Math.max(...fed.map(r => r.loss)), loud = fed.filter(r => r.strong); add('loss', 'الفقد الكلي عند الـ ONT ≤ 28 dB', 'Total loss at the ONT ≤ 28 dB', bad.length ? 'bad' : mx > L.maxLoss - 2 || loud.length ? 'warn' : 'ok', 'الأسوأ ' + mx.toFixed(1) + ' dB' + (bad.length ? ' — ' + bad.length + ' علبة تتجاوز' : '') + (loud.length ? ' — ' + loud.length + ' علبة إشارتها أقوى من تحمّل الأجهزة (يلزم مخمّد)' : ''), 'worst ' + mx.toFixed(1) + ' dB' + (bad.length ? ' — ' + bad.length + ' FDB over' : '') + (loud.length ? ' — ' + loud.length + ' FDB too strong for the receivers (attenuator needed)' : ''), bad.concat(loud).map(r => r.node.id)); }
+    // every flat needs its own splitter output
+    const served = SP.capacity();
+    if (!served.length) add('ports', 'منافذ كافية لكل شقق المبنى', 'Enough ports for every flat of a building', 'na', 'لا مبانٍ إلها علبة بعد.', 'No building has a box yet.');
+    else { const short = served.filter(x => x.ports < x.flats), guess = served.filter(x => !x.known).length;
+      add('ports', 'منافذ كافية لكل شقق المبنى', 'Enough ports for every flat of a building', short.length ? 'bad' : guess ? 'warn' : 'ok',
+        short.length ? short.length + ' مبنى منافذه أقل من شققه (الأسوأ: ' + short[0].ports + ' منفذ لـ ' + short[0].flats + ' شقة)' : served.length + ' مبنى منافذه كافية' + (guess ? ' — ' + guess + ' منها عدد شققه مقدّر' : ''),
+        short.length ? short.length + ' building(s) with fewer ports than flats (worst: ' + short[0].ports + ' ports for ' + short[0].flats + ' flats)' : served.length + ' building(s) covered' + (guess ? ' — ' + guess + ' with an estimated flat count' : ''), short.map(x => x.fdb)); }
     // 3 FDB per building
     const blds = FT.map.housesData().filter(h => h.o.num || h.o.fdb).map(h => [h.id, h.o, h.ll]), fdbs = nodes.filter(n => n.type === 'bk');
     if (!blds.length) add('fdb_b', 'علبة FDB عند مدخل كل مبنى', 'One FDB at the entrance of every building', fdbs.length ? 'warn' : 'na', fdbs.length ? fdbs.length + ' علبة FDB لكن لا مبانٍ مرقّمة لفحص التغطية — رقّم المباني أو استعمل «إنشاء بنية»' : 'لا مبانٍ مرقّمة ولا علب بعد', fdbs.length ? fdbs.length + ' FDB but no numbered buildings to check coverage — number the buildings or use “Auto design”' : 'no numbered buildings and no FDB yet');
@@ -128,17 +144,19 @@
   };
   // subscribers (ONT): path from the nearest OLT to the box they hang on
   SP.subRows = function () {
-    const S = FT.state, olts = Object.values(S.nodes).filter(n => n.type === 'olt'), adj = SP.graph(), trees = olts.map(o => ({ olt: o, t: SP.tree(o.id, adj) }));
+    const S = FT.state, olts = Object.values(S.nodes).filter(n => n.type === 'olt'), adj = SP.graph(), trees = olts.map(o => ({ olt: o, t: SP.tree(o.id, adj) })), ix = FT.fiber.index();
     return Object.values(S.subs || {}).map(sub => {
       let best = null; trees.forEach(({ olt, t }) => { if (t.dist[sub.node] != null && (!best || t.dist[sub.node] < best.len)) best = { olt, len: t.dist[sub.node], t }; });
       if (!best) return { sub, fed: false };
-      const path = SP.pathTo(best.t, sub.node); return Object.assign({ sub, fed: true, olt: best.olt, path, len: best.len }, SP.metrics(path, best.len));
+      const path = SP.pathTo(best.t, sub.node), row = Object.assign({ sub, fed: true, olt: best.olt, path, len: best.len }, SP.metrics(path, best.len));
+      const tr = FT.fiber.traceSub(sub.id, ix); if (tr && tr.reached && tr.budget) Object.assign(row, fromBudget(tr.budget));
+      return row;
     });
   };
   SP.budgetHtml = function () {
     const fdb = SP.analyze().filter(r => r.fed).sort((a, b) => b.loss - a.loss).slice(0, 30), subs = SP.subRows().slice(0, 30);
     if (!fdb.length && !subs.length) return '<p class="d">OLT + FDB/ONT + ' + (ar() ? 'كبلات' : 'cables') + ' → ' + FT.t('an_budget') + '</p>';
-    const L = FT.LIMITS.maxLoss, B = FT.BASE_LOSS, rxc = rx => rx > B.rxSens + 3 ? 'var(--ok)' : rx > B.rxSens ? 'var(--warn)' : 'var(--bad)';
+    const L = FT.LIMITS.maxLoss, C = FT.fiber.cfg(), rxc = rx => rx > C.onuSens + C.warnMargin ? 'var(--ok)' : rx > C.onuSens ? 'var(--warn)' : 'var(--bad)';
     const line = (nm, r) => '<tr><td>' + esc(nm) + '</td><td>' + r.km.toFixed(2) + '</td><td>1:' + r.split + '</td><td style="color:' + (r.loss > L ? 'var(--bad)' : r.loss > L - 2 ? 'var(--warn)' : 'var(--ok)') + '">' + r.loss.toFixed(1) + '</td><td style="color:' + rxc(r.rx) + '">' + r.rx.toFixed(1) + ' dBm</td></tr>';
     let h = '<table class="t"><tr><th></th><th>km</th><th>1:N</th><th>dB</th><th>Rx</th></tr>';
     fdb.forEach(r => { h += line(r.node.code || r.node.name, r); });
@@ -150,11 +168,11 @@
   SP.open = function () {
     const soc = SP.soc(), D = () => FT.deliver, b = (id, l, cls) => '<button class="btn ' + (cls || '') + '" id="' + id + '">' + l + '</button>';
     const body = '<div class="kv"><span style="color:var(--ok)">✔ ' + soc.ok + '</span><span style="color:var(--warn)">⚠ ' + soc.warn + '</span><span style="color:var(--bad)">✘ ' + soc.bad + '</span></div>' + SP.table(soc) +
-      '<h4 style="color:var(--hot2);margin:14px 0 6px">' + FT.t('soc_deliver') + '</h4><div class="seg">' + b('dvCodes', FT.t('dv_codes')) + b('dvPack', FT.t('dv_pack'), 'pri') + b('dvGpkg', 'GeoPackage (QGIS)') + b('dvKmz', 'KMZ (KML 2.2)') + b('dvLld', FT.t('dv_lld')) + b('dvBom', FT.t('dv_bom')) + b('dvSec', FT.t('dv_sec')) + b('dvOtdr', FT.t('dv_otdr')) + b('dvDxf', 'DXF') + b('dvGeo', 'GeoJSON') + '</div><p class="d" style="margin-top:8px">' + FT.t('soc_note') + '</p>';
+      '<h4 style="color:var(--hot2);margin:14px 0 6px">' + FT.t('soc_deliver') + '</h4><div class="seg">' + b('dvCodes', FT.t('dv_codes')) + b('dvPack', FT.t('dv_pack'), 'pri') + b('dvGpkg', 'GeoPackage (QGIS)') + b('dvKmz', 'KMZ (KML 2.2)') + b('dvLld', FT.t('dv_lld')) + b('dvBom', FT.t('dv_bom')) + b('dvSec', FT.t('dv_sec')) + b('dvOtdr', FT.t('dv_otdr')) + b('dvMtpl', ar() ? 'قالب القياسات (CSV)' : 'Readings sheet (CSV)') + b('dvMimp', ar() ? '⬆ استيراد القياسات' : '⬆ Import readings') + b('dvState', ar() ? 'حالة التنفيذ (CSV)' : 'Build state (CSV)') + b('dvDxf', 'DXF') + b('dvGeo', 'GeoJSON') + '</div><p class="d" style="margin-top:8px">' + FT.t('soc_note') + '</p>';
     FT.UI.modal(FT.t('soc_title'), body, [{ label: FT.t('close') }], root => {
       const on = (id, fn) => { const e = root.querySelector('#' + id); if (e) e.onclick = fn; };
       on('dvCodes', () => { FT.commit(); const n = SP.autoCodes(true); FT.changed('codes'); FT.UI.toast((ar() ? 'رُمّزت ' : 'Coded ') + n + ' FDB'); SP.open(); });
-      on('dvPack', () => D().pack()); on('dvGpkg', () => D().gpkg()); on('dvKmz', () => D().kmz()); on('dvLld', () => D().lldCsv()); on('dvBom', () => FT.exp.reportCsv(null)); on('dvSec', () => D().sections()); on('dvOtdr', () => D().otdr());
+      on('dvPack', () => D().pack()); on('dvGpkg', () => D().gpkg()); on('dvKmz', () => D().kmz()); on('dvLld', () => D().lldCsv()); on('dvBom', () => FT.exp.reportCsv(null)); on('dvSec', () => D().sections()); on('dvOtdr', () => D().otdr()); on('dvMtpl', () => FT.field.downloadTemplate()); on('dvMimp', () => FT.field.pickImport()); on('dvState', () => FT.exp.download('ftth_build_state.csv', new Blob([FT.field.csvState()], { type: 'text/csv;charset=utf-8' })));
       on('dvDxf', () => { FT.UI.closeModal(); FT.exp.area = { mode: null, ring: null }; FT.exp.openDxf(); }); on('dvGeo', () => FT.exp.geojson());
     });
   };

@@ -167,6 +167,9 @@
       else if (s.type === 'splitter') add(T('مقسّم ', 'Splitter ') + ltr(s.ratio), code(nid(s.node)) + ' · ' + T('مخرج ', 'out ') + ltr(s.port), null, FT.fiber.splitterLoss(s.ratio));
     });
     add(T('مقسّم العلبة ', 'Box splitter ') + ltr(r.splitter.ratio), code(nid(r.node.id)), null, FT.fiber.splitterLoss(r.splitter.ratio));
+    if (r.budget.slackM > 0.005) add(T('احتياط اللفّات والهالك', 'Cable loops and waste'), T('على المسار', 'along the path'), r.budget.slackM, r.budget.slackM / 1000 * C.att1490);
+    if (r.budget.boxConnectors) add(T('موصلات داخل العلب × ', 'Connectors inside the boxes × ') + ltr(r.budget.boxConnectors), T('على المسار', 'along the path'), null, r.budget.boxConnectors * C.connector);
+    if (r.budget.assumedFusions) add(T('لحامات مقدّرة غير مرسومة × ', 'Assumed splices, not drawn × ') + ltr(r.budget.assumedFusions), T('على المسار', 'along the path'), null, r.budget.assumedFusions * C.fusion);
     if (r.budget.dropM) add(T('كبل المشترك (طول مفترض)', 'Drop (assumed length)'), T('إلى المشترك', 'to the subscriber'), r.budget.dropM, r.budget.dropM / 1000 * C.att1490);
     for (let i = 1; i < C.connectors; i++) add(T('موصل عند المشترك', 'Connector at the subscriber'), T('جهاز المشترك', 'ONU'), null, C.connector);
     return rows;
@@ -281,6 +284,7 @@
 
     // 15 specification check
     const soc = { ok: ['ok', T('مطابق', 'Compliant')], bad: ['bad', T('غير مطابق', 'Not compliant')], warn: ['warn', T('تنبيه', 'Warning')], na: ['na', T('لا ينطبق', 'N/A')] };
+    if (FT.field) FT.field.reportSections(sec, paged, T, code, esc);
     sec(T('المطابقة للمواصفة', 'Specification check'), [{ title: T('فحص المطابقة لمواصفات السورية للاتصالات', 'Syrian Telecom specification check'), html: (scope ? '<p class="note">' + T('هذا الفحص يخص المشروع كاملاً لأن مسارات الألياف تمتد خارج المنطقة المحددة.', 'This check covers the whole project, because fibre paths run beyond the selected area.') + '</p>' : '') + '<div class="socbar"><i style="flex:' + d.soc.ok + ';background:#17a86b"></i><i style="flex:' + d.soc.warn + ';background:#d99a00"></i><i style="flex:' + d.soc.bad + ';background:#d64550"></i></div><table class="grid soc"><colgroup><col style="width:46%"/><col style="width:40%"/><col style="width:14%"/></colgroup><thead><tr><th>' + T('البند', 'Requirement') + '</th><th>' + T('التفاصيل', 'Detail') + '</th><th>' + T('النتيجة', 'Result') + '</th></tr></thead><tbody>' + d.soc.items.map(i => '<tr><td class="wrap"><b>' + esc(ar() ? i.ar : i.en) + '</b></td><td class="wrap">' + esc(i.detail) + '</td><td>' + pill(soc[i.status][0], soc[i.status][1]) + '</td></tr>').join('') + '</tbody></table>' }]);
 
     // 16 values and notes

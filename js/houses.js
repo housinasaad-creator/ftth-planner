@@ -10,6 +10,10 @@
   H.MINZ = 16.5;
   H.INSET_M = 2.5; // how far inside the street-side wall the house point sits
   H.floorsOf = o => Math.max(1, Math.min(H.MAX_FLOORS, (o && o.floors) || H.DEFAULT_FLOORS));
+  // flats (possible subscribers) of a building: the number the engineer typed, else floors x flats-per-floor of the project
+  H.PER_FLOOR = 2; H.BOX_PORTS = 16;
+  H.setting = () => Object.assign({ perFloor: H.PER_FLOOR, boxPorts: H.BOX_PORTS }, (FT.state && FT.state.cfg && FT.state.cfg.homes) || {});
+  H.homesOf = (o, perFloor) => o && o.flats > 0 ? Math.min(400, o.flats) : H.floorsOf(o) * Math.max(1, perFloor || H.setting().perFloor);
 
   // ---------------- the icon (design 7: stacked floors under a coral roof) ----------------
   H.metrics = n => { const fh = n <= 6 ? 4.6 : n <= 12 ? 3.7 : 3.0, gaps = Math.floor((n - 1) / 5); return { fh, gaps, w: 26, roof: 9, gap: 1.8, body: n * fh + gaps * 1.8 }; }; // css pixels

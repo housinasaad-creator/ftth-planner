@@ -11,7 +11,7 @@
   const C = () => G.FT_CFG;
 
   async function rpc(fn, body) {
-    const r = await fetch(C().url + '/rest/v1/rpc/' + fn, { method: 'POST', headers: { apikey: C().anonKey, Authorization: 'Bearer ' + C().anonKey, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    const r = await fetch(C().url + '/rest/v1/rpc/' + fn, { method: 'POST', headers: Object.assign({ apikey: C().anonKey, Authorization: 'Bearer ' + C().anonKey, 'Content-Type': 'application/json' }, FT.auth ? FT.auth.headers() : {}), body: JSON.stringify(body) });
     if (!r.ok) { const t = await r.text(); throw new Error(fn + ' ' + r.status + ' ' + t.slice(0, 120)); }
     return r.json();
   }
@@ -38,7 +38,7 @@
     const e = reg().find(x => x.id === id), owned = e && e.key && e.key !== 'local' && (e.mode || 'edit') === 'edit', key = (owned ? e.key : keyOverride) || (e && e.key); if (!key) return false;
     let st = null, mode = 'edit', name = e ? e.name : '', type = e ? e.type : 'gpon';
     let newer = null;
-    try { const r = await rpc('ftth_get_project', { p_id: id, p_key: key }); if (r) { st = r.state; mode = r.mode; name = r.name; type = r.type; S.online = true; const lt = +localStorage.getItem('ft2_t_' + id) || 0, cache = jget(CACHE(id), null); if (cache && mode === 'edit' && lt > (Date.parse(r.updated_at) || 0) + 1500) newer = cache; } else if (!keyOverride) { upsertReg({ id, gone: 1 }); } } catch (x) { S.online = false; st = jget(CACHE(id), null); }
+    try { const r = await rpc('ftth_get_project', { p_id: id, p_key: key }); if (r) { st = r.state; mode = r.mode; name = r.name; type = r.type; S.online = true; const lt = +localStorage.getItem('ft2_t_' + id) || 0, cache = jget(CACHE(id), null); if (cache && mode === 'edit' && lt > (Date.parse(r.updated_at) || 0) + 1500) newer = cache; } else if (!keyOverride) { upsertReg({ id, gone: 1 }); } } catch (x) { S.online = false; if (FT.auth && FT.auth.refused(x)) { if (FT.UI) FT.UI.toast(FT.lang === 'ar' ? 'هالمشروع مربوط بجهة. ادخل من زر «دخول» من جهاز مسجّل.' : 'This project belongs to an organisation. Sign in on a registered device.'); return false; } st = jget(CACHE(id), null); }
     if (!st) return false;
     if (FT.sync) FT.sync.stop(); // sends what is left of the previous project, before its state is replaced
     FT.setState(st); st = FT.state; S.mode = mode; S.cur = { id, key, name: name || (st.meta && st.meta.name) || '', type: type || (st.meta && st.meta.type) || 'gpon', viewKey: e && e.viewKey };

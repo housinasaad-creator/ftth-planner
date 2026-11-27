@@ -13,7 +13,20 @@
   // ---------------- planning values (Syrian Telecom maxima first; every one is shown to the engineer and can be changed per project) ----------------
   F.DEFAULTS = {
     att1310: 0.40, att1490: 0.30, fusion: 0.1, connector: 0.5, connectors: 2, dropM: 100,
-    oltTx: 3, onuSens: -27, onuTx: 0.5, oltSens: -28, maxLoss: 28, warnMargin: 3,
+    // equipment: GPON class B+. The transmit power used for the weakest case is the lowest the class guarantees, the highest one
+    // is used to see whether a short link would arrive too strong
+    oltTx: 1.5, onuSens: -27, onuTx: 0.5, oltSens: -28, oltTxMax: 5, onuOver: -8, onuTxMax: 5, oltOver: -8, maxLoss: 28, warnMargin: 3,
+    // cable that is bought and spliced but not seen on the map: a loop kept at both ends of every cable, a loop in every chamber
+    // it passes, and the waste of sag and cutting. Planning values: the contractor's own rules replace them
+    slackEnd: 10, slackHole: 3, waste: 3,
+    otdrTol: 1, // a field reading may be this much over the designed loss before it is flagged
+    // joints the light meets inside the plant. The ST specification equips FDC and FDB with SC/APC adapters AND splice trays; how many
+    // the path really crosses depends on the boxes used, so the careful values are the default and each project can change them
+    boxConn: 2, boxSplice: 2, holeSplice: 1,
+  };
+  F.OPTICS = {
+    'B+': { oltTx: 1.5, oltTxMax: 5, onuSens: -27, onuOver: -8, onuTx: 0.5, onuTxMax: 5, oltSens: -28, oltOver: -8 },
+    'C+': { oltTx: 3, oltTxMax: 7, onuSens: -30, onuOver: -8, onuTx: 0.5, onuTxMax: 5, oltSens: -32, oltOver: -12 },
   };
   F.cfg = function () { return Object.assign({}, F.DEFAULTS, (FT.state.cfg && FT.state.cfg.budget) || {}); };
   F.splitterLoss = r => { const own = FT.state.cfg && FT.state.cfg.splitterLoss; return own && own[r] != null ? +own[r] : (FT.SPLITTER_LOSS[r] || 0); };
@@ -165,18 +178,64 @@
   }
 
   // ---------------- budget ----------------
-  F.budget = function (steps, opt) {
-    const C = F.cfg(); opt = opt || {};
-    let m = 0, fus = 0; const ratios = []; let splitterDb = 0;
-    steps.forEach(s => { if (s.type === 'strand') m += s.len; else if (s.type === 'fusion') fus++; else if (s.type === 'splitter') { ratios.push(s.ratio); splitterDb += F.splitterLoss(s.ratio); } });
-    const dropM = opt.assumeDrop ? C.dropM : 0, km = (m + dropM) / 1000, conn = C.connectors;
+  // THE ONE RULE. Every screen, report and export gets its loss from F.compose: the trace, the compliance check, the analysis
+  // panel, the design preview and results, the PDF report, KMZ and the delivery files.
+  //   connectors = the two end ones + boxConn in every cabinet / box on the path
+  //   splices    = boxSplice in every cabinet / box + holeSplice in every manhole / handhole, or the drawn splices if there are more
+  F.compose = function (o) {
+    const C = F.cfg(), boxes = o.boxes || 0, holes = o.holes || 0, drawn = o.drawn || 0, ratios = o.ratios || [];
+    const dropM = o.dropM || 0, routeM = o.metres || 0, m = routeM * (1 + C.waste / 100) + 2 * C.slackEnd * Math.max(1, boxes) + C.slackHole * holes, km = (m + dropM) / 1000;
+    const boxConnectors = C.boxConn * boxes, conn = C.connectors + boxConnectors, fus = Math.max(drawn, C.boxSplice * boxes + C.holeSplice * holes);
+    const splitterDb = ratios.reduce((a, r) => a + F.splitterLoss(r), 0);
     const dir = att => { const fibre = km * att, splice = fus * C.fusion, connector = conn * C.connector; return { fibre, splice, connector, splitter: splitterDb, total: fibre + splice + connector + splitterDb }; };
     const down = dir(C.att1490), up = dir(C.att1310);
     down.tx = C.oltTx; down.rx = C.oltTx - down.total; down.sens = C.onuSens; down.margin = down.rx - C.onuSens;
     up.tx = C.onuTx; up.rx = C.onuTx - up.total; up.sens = C.oltSens; up.margin = up.rx - C.oltSens;
     const worstLoss = Math.max(down.total, up.total), sensMargin = Math.min(down.margin, up.margin), lossMargin = C.maxLoss - worstLoss;
-    const status = lossMargin < 0 || sensMargin < 0 ? 'bad' : lossMargin < C.warnMargin || sensMargin < C.warnMargin ? 'warn' : 'ok';
-    return { fibreM: m, dropM, km, fusions: fus, connectors: conn, ratios: ratios.slice().reverse(), split: ratios.reduce((a, r) => a * (F.ratioN(r) || 1), 1), down, up, worstLoss, lossMargin, sensMargin, critical: up.margin < down.margin ? 'up' : 'down', status };
+    // a link with too little loss reaches the receiver stronger than it can take (for class B+ this is the 13 dB minimum of the class)
+    const minLoss = Math.max(C.oltTxMax - C.onuOver, C.onuTxMax - C.oltOver), tooStrong = Math.min(down.total, up.total) < minLoss;
+    const status = lossMargin < 0 || sensMargin < 0 ? 'bad' : lossMargin < C.warnMargin || sensMargin < C.warnMargin || tooStrong ? 'warn' : 'ok';
+    return { minLoss, tooStrong, spare: Math.min(lossMargin, sensMargin) - C.warnMargin, routeM, slackM: m - routeM, fibreM: m, dropM, km, boxes, holes, fusions: fus, drawnFusions: drawn, assumedFusions: fus - drawn, connectors: conn, boxConnectors, ratios, split: ratios.reduce((a, r) => a * (F.ratioN(r) || 1), 1), down, up, worstLoss, lossMargin, sensMargin, critical: up.margin < down.margin ? 'up' : 'down', status };
+  };
+  const countNodes = ids => { let boxes = 0, holes = 0; ids.forEach(id => { const n = FT.state.nodes[id]; if (!n) return; if (FT.BOX_TYPES.includes(n.type)) boxes++; else if (n.type === 'mh' || n.type === 'hh') holes++; }); return { boxes, holes }; };
+  // every node the light passes on a walked path
+  F.pathNodes = function (steps) {
+    const ids = new Set();
+    steps.forEach(s => {
+      if (s.node) ids.add(s.node);
+      if (s.type !== 'strand') return;
+      const c = FT.state.cables[s.cable], list = c ? (c.nodes || [c.a, c.b]) : [], i = list.indexOf(s.from), j = s.to == null ? list.length - 1 : list.indexOf(s.to);
+      if (i >= 0 && j >= 0) for (let k = Math.min(i, j); k <= Math.max(i, j); k++) ids.add(list[k]);
+    });
+    return ids;
+  };
+  // a path that has been walked strand by strand
+  F.budget = function (steps, opt) {
+    opt = opt || {};
+    let m = 0, drawn = 0; const ratios = [];
+    steps.forEach(s => { if (s.type === 'strand') m += s.len; else if (s.type === 'fusion') drawn++; else if (s.type === 'splitter') ratios.push(s.ratio); });
+    return F.compose(Object.assign({ metres: m, dropM: opt.assumeDrop ? F.cfg().dropM : 0, drawn, ratios: ratios.reverse() }, countNodes(F.pathNodes(steps))));
+  };
+  // a path not spliced yet: the same rule applied to the nodes on the cable route
+  F.estimate = function (path, metres) {
+    const ratios = []; path.forEach(id => { const n = FT.state.nodes[id]; if (n && n.ratio) ratios.push(n.ratio); });
+    return F.compose(Object.assign({ metres, dropM: F.cfg().dropM, ratios }, countNodes(path)));
+  };
+  // the length of cable to buy and lay: the drawn route, the waste, the loops at both ends and in the chambers it passes
+  F.cableNeed = function (c) {
+    const C = F.cfg(), inner = (c.nodes || []).slice(1, -1).filter(id => { const n = FT.state.nodes[id]; return n && (n.type === 'mh' || n.type === 'hh'); }).length;
+    return FT.cableLength(c) * (1 + C.waste / 100) + 2 * C.slackEnd + C.slackHole * inner;
+  };
+  // the walked budget of every building box that really reaches an OLT (the weakest of its splitters)
+  F.boxBudgets = function (ix) {
+    ix = ix || F.index(); const out = {};
+    Object.values(FT.state.nodes).filter(n => n.type === 'bk').forEach(n => F.splittersOf(n.id).forEach(sp => {
+      const up = [], upI = [], seen = {}; seen[sp.key] = 1; const res = goUp(ix, sp.node, { s: sp.key, p: 0 }, up, upI, seen);
+      if (!res.reached) return;
+      const b = F.budget(up.concat([{ type: 'splitter', node: sp.node, key: sp.key, ratio: sp.ratio, port: 0 }]), { assumeDrop: true });
+      if (!out[n.id] || b.worstLoss > out[n.id].worstLoss) out[n.id] = b;
+    }));
+    return out;
   };
 
   // ---------------- traces ----------------

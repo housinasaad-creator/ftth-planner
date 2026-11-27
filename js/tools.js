@@ -141,6 +141,7 @@
   T.pickHouseMove = function (id, kind) { T.movePick = { id, kind: kind || 'bld' }; map.getCanvas().style.cursor = 'crosshair'; U().hint(FT.t('house_move_hint')); };
   T.endHouseMove = function () { T.movePick = null; map.getCanvas().style.cursor = ''; U().hint(''); };
   function onClick(e) {
+    if (FT.field && FT.field.active) return; // field mode: the map only picks elements
     if (dragging && dragging.moved) return;
     const p = ll(e), t = T.tool;
     if (T.movePick) { const m = T.movePick; if (!guard(p)) return; T.endHouseMove(); FT.commit(); if (m.kind === 'node') { T.moveNode(m.id, p); FT.changed('move'); T.select('node', m.id); } else { FT.houses.moveTo(m.id, p); FT.changed('bld'); T.select('bld', m.id); U().toast(FT.t('house_moved')); } return; }
@@ -198,6 +199,7 @@
     else if (d.kind === 'measure' || d.kind === 'area' || d.kind === 'shape') { const pts = d.pts.concat([cur]); U().meterMeasure(e.point, pts); }
   }
   function onDbl(e) {
+    if (FT.field && FT.field.active) return; // field mode: the map only picks elements
     if (T.tool === 'select' && FT.imp && FT.imp.unlocked.size && map.getLayer('imp-line')) {
       const f = map.queryRenderedFeatures([[e.point.x - 7, e.point.y - 7], [e.point.x + 7, e.point.y + 7]], { layers: ['imp-line'] }).find(x => FT.imp.unlocked.has(x.properties.imp));
       if (f && FT.imp.insertVertex(f.properties.imp, +f.properties.fi, ll(e))) { e.preventDefault(); return; }
@@ -206,6 +208,7 @@
   }
   function onDbl2(e) { if (T.draw && T.draw.kind !== 'shape' || (T.draw && T.draw.shape === 'poly')) { e.preventDefault(); T.finish(); } }
   function onCtx(e) {
+    if (FT.field && FT.field.active) return; // field mode: the map only picks elements
     if (T.draw) { e.preventDefault && e.preventDefault(); T.finish(); return; }
     const h = hit(e), extra = [];
     if (map.getLayer('impv-pt')) { const iv = map.queryRenderedFeatures([[e.point.x - 8, e.point.y - 8], [e.point.x + 8, e.point.y + 8]], { layers: ['impv-pt'] }); if (iv.length) { const pr = iv[0].properties; extra.push([FT.lang === 'ar' ? 'حذف هذه النقطة' : 'Delete this point', () => FT.imp.deleteVertex(pr)]); } }
@@ -222,6 +225,7 @@
   T.isDragging = () => !!dragging;
   T.MOVE_MAX_M = 50; // metres under a 100 px scale bar; zoomed out further than this, elements cannot be dragged
   function onDown(e) {
+    if (FT.field && FT.field.active) return; // field mode: the map only picks elements
     if (T.tool !== 'select' || e.originalEvent.button !== 0) return;
     const bx = [[e.point.x - 8, e.point.y - 8], [e.point.x + 8, e.point.y + 8]];
     if (!(FT.store && FT.store.mode === 'view') && !T.tooHigh()) {

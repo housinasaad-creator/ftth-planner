@@ -289,12 +289,12 @@
   };
   M.rebuildBuildingData = function (x0, x1, y0, y1) {
     if (x0 == null) { const b = map.getBounds(); x0 = tx(b.getWest()); x1 = tx(b.getEast()); y0 = ty(b.getNorth()); y1 = ty(b.getSouth()); }
-    const feats = [], over = FT.state.bld || {};
+    const feats = [], over = FT.state.bld || {}, served = new Set(Object.values(FT.state.subs || {}).map(s => s.bld));
     const bb = map.getBounds(), W = bb.getWest() - 0.002, E = bb.getEast() + 0.002, S0 = bb.getSouth() - 0.002, N0 = bb.getNorth() + 0.002;
     const push = (id, h, ring) => {
       const o = over[id] || {}; if (o.deleted) return;
       const fl = o.floors || 0, eh = FT.houses.floorsOf(o) * 3.2;
-      feats.push({ type: 'Feature', id: feats.length, properties: { id, eh, h, fl, num: o.num || 0, lab: FT.num ? FT.num.label(o) : '', st: o.st || 0 }, geometry: { type: 'Polygon', coordinates: [ring] } });
+      feats.push({ type: 'Feature', id: feats.length, properties: { id, eh, h, fl, num: o.num || 0, lab: FT.num ? FT.num.label(o) : '', st: o.st && served.has(id) ? o.st : 0 }, geometry: { type: 'Polygon', coordinates: [ring] } });
     };
     for (let x = x0; x <= x1; x++) for (let y = y0; y <= y1; y++) {
       const t = tileCache[x + '/' + y]; if (!t) continue;

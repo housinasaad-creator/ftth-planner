@@ -143,6 +143,7 @@
       const r = await request(Y.rev, myInfo());
       if (g !== gen) return;
       if (r) {
+        if (FT.versions) FT.versions.beforeRemote(r.changes);
         const res = apply(r.changes || [], false); Y.rev = Math.max(Y.rev, r.rev || 0); jset('ft2_rev_' + cur.id, Y.rev);
         fixTwins(res.fresh); refreshUI(res); setPeers(r.peers); drawPeers();
         const sig = Y.peers.map(p => ((p.info || {}).u || p.client) + ':' + p.name).sort().join('|'); if (sig !== whoSig) { whoSig = sig; if (FT.UI) FT.UI.refreshTreeSoon(); } setOnline(true); if (r.more) wait = 30;

@@ -15,8 +15,9 @@
     if (!fdb && c) { let bd = 40; Object.values(S.nodes).forEach(n => { if (n.type !== 'bk') return; const d = FT.dist(n.ll, c); if (d < bd) { bd = d; fdb = n; } }); }
     let near = null; if (!fdb && c) { let bd = 120; Object.values(S.nodes).forEach(n => { const d = FT.dist(n.ll, c); if (d < bd) { bd = d; near = n; } }); dist = near ? bd : null; }
     const feed = fdb ? Object.values(S.cables).find(k => k.nodes.includes(fdb.id) && ((FT.CABLE_CAT.find(x => x.id === k.cat) || {}).group !== 'Drop') && k.nodes[k.nodes.length - 1] === fdb.id) || Object.values(S.cables).find(k => k.nodes.includes(fdb.id) && ((FT.CABLE_CAT.find(x => x.id === k.cat) || {}).group !== 'Drop')) : null;
-    const ports = fdb ? (ratioN(fdb.ratio) || 4) : 0, used = Math.min(ports, subs.length);
-    return { id, o, floors, num: o.num ? FT.num.label(o) : '', subs, fdb, near, dist, feed, ports, used, area: null };
+    const boxes = fdb ? Object.values(S.nodes).filter(n => n.type === 'bk' && (n.id === fdb.id || n.bld === id)) : [];
+    const ports = boxes.reduce((a, n) => a + (ratioN(n.ratio) || 4) * Math.max(1, n.nsplit || 1), 0), used = Math.min(ports, subs.length);
+    return { boxes: boxes.length, flats: FT.houses.homesOf(o), flatsKnown: o.flats > 0, id, o, floors, num: o.num ? FT.num.label(o) : '', subs, fdb, near, dist, feed, ports, used, area: null };
   };
 
   const esc = s => String(s == null ? '' : s).replace(/[<>&"]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c]));
@@ -35,7 +36,7 @@
     g += '<text x="' + (bx + fw + 17) + '" y="' + ((top + gy) / 2 + 5) + '" fill="#eceff6" font-size="13" font-weight="800">' + I.floors + '</text>';
     if (I.num) g += '<g><rect x="' + (bx + fw / 2 - 22) + '" y="' + (Math.max(4, top - 36)) + '" width="44" height="18" rx="9" fill="#ff6a3d"/><text x="' + (bx + fw / 2) + '" y="' + (Math.max(4, top - 36) + 13) + '" fill="#07090d" font-size="12" font-weight="800" text-anchor="middle">' + esc(I.num) + '</text></g>';
     if (I.fdb) {
-      const x0 = 14, y0 = 84, bw = 60, bh = 74, n = Math.max(1, I.ports);
+      const x0 = 14, y0 = 84, bw = 60, bh = 74, n = Math.max(1, Math.min(8, I.ports));
       // FDB box with splitter symbol
       g += '<rect x="' + x0 + '" y="' + y0 + '" width="' + bw + '" height="' + bh + '" rx="8" fill="#3a1722" stroke="#ff4f7a" stroke-width="2"/>';
       g += '<text x="' + (x0 + bw / 2) + '" y="' + (y0 + 14) + '" fill="#ffb3c6" font-size="11" font-weight="800" text-anchor="middle">FDB</text>';
@@ -46,14 +47,14 @@
       g += '<path d="M' + x0 + ' ' + (y0 + bh / 2 + 6) + ' H8" stroke="#2bd18b" stroke-width="2.4"/>';
       g += '<path d="M8 ' + (y0 + bh / 2 + 6) + ' V30" stroke="#2bd18b" stroke-width="2.4" fill="none"/>';
       g += '<rect x="4" y="8" width="38" height="22" rx="5" fill="#2bd18b"/><text x="23" y="24" fill="#07090d" font-size="11" font-weight="800" text-anchor="middle">OLT</text>';
-      g += '<text x="14" y="62" fill="#2bd18b" font-size="11" font-weight="800">' + (I.feed ? '1/' + I.feed.core : '1') + '</text>';
+      g += '<text x="14" y="62" fill="#2bd18b" font-size="11" font-weight="800">' + (I.feed ? Math.max(1, I.fdb.nsplit || 1) + '/' + I.feed.core : String(Math.max(1, I.fdb.nsplit || 1))) + '</text>';
       // strands to the building
       for (let k = 0; k < n; k++) {
         const y1 = n === 1 ? y0 + 36 : y0 + 24 + k * ((bh - 34) / (n - 1)), y2 = gy - 14 - k * (n === 1 ? 0 : Math.min(8, 70 / n)), col = FT.FIBER_COLORS[k % 12].hex, on = k < I.used;
         g += '<path d="M' + (x0 + bw - 8) + ' ' + y1 + ' L' + (x0 + bw) + ' ' + y1 + ' C128 ' + y1 + ' 150 ' + y2 + ' ' + bx + ' ' + y2 + '" fill="none" stroke="' + col + '" stroke-width="' + (on ? 3 : 2) + '" stroke-linecap="round"' + (on ? '' : ' stroke-dasharray="4 4" opacity=".45"') + '/>';
         g += '<circle cx="' + bx + '" cy="' + y2 + '" r="' + (on ? 4.2 : 3) + '" fill="' + (on ? col : '#0b0e14') + '" stroke="' + col + '" stroke-width="1.6"' + (on ? '' : ' opacity=".6"') + '/>';
       }
-      g += '<text x="' + (x0 + bw + 52) + '" y="' + (y0 - 8) + '" fill="#eceff6" font-size="13" font-weight="800" text-anchor="middle">' + I.used + ' / ' + n + '</text>';
+      g += '<text x="' + (x0 + bw + 52) + '" y="' + (y0 - 8) + '" fill="#eceff6" font-size="13" font-weight="800" text-anchor="middle">' + I.used + ' / ' + I.ports + '</text>';
     } else {
       g += '<rect x="14" y="84" width="60" height="74" rx="8" fill="none" stroke="#ff4f7a" stroke-width="2" stroke-dasharray="6 5" opacity=".55"/><text x="44" y="116" fill="#ff4f7a" font-size="12" font-weight="800" text-anchor="middle" opacity=".7">FDB</text><text x="44" y="142" fill="#ff4f7a" font-size="22" font-weight="800" text-anchor="middle" opacity=".7">?</text>';
       g += '<path d="M74 121 C120 121 150 ' + (gy - 14) + ' ' + bx + ' ' + (gy - 14) + '" fill="none" stroke="#5d667d" stroke-width="2" stroke-dasharray="5 5"/><g stroke="#ff4f7a" stroke-width="3.2" stroke-linecap="round"><path d="M122 ' + (gy - 36) + ' l14 14 M136 ' + (gy - 36) + ' l-14 14"/></g>';
@@ -65,7 +66,8 @@
     const I = DG.info(id), ar = FT.lang === 'ar', ln = [];
     if (I.fdb) {
       ln.push((ar ? 'العلبة: ' : 'Box: ') + (I.fdb.code || I.fdb.name) + (I.fdb.ratio ? ' · ' + I.fdb.ratio : ''));
-      ln.push((ar ? 'ألياف مستعملة: ' : 'Fibres used: ') + I.used + ' / ' + I.ports + (I.feed ? ' · ' + (ar ? 'كبل التغذية ' : 'feed cable ') + I.feed.core + 'C' : ''));
+      ln.push((ar ? 'منافذ مستعملة: ' : 'Ports used: ') + I.used + ' / ' + I.ports + (I.boxes > 1 ? (ar ? ' · ' + I.boxes + ' علب' : ' · ' + I.boxes + ' boxes') : '') + (I.feed ? ' · ' + (ar ? 'كبل التغذية ' : 'feed cable ') + I.feed.core + 'C' : ''));
+      ln.push((ar ? 'الشقق: ' : 'Flats: ') + I.flats + (I.flatsKnown ? '' : (ar ? ' (مقدّر)' : ' (estimated)')) + (I.ports < I.flats ? (ar ? ' — المنافذ ما بتكفّي' : ' — not enough ports') : ''));
     } else ln.push(I.near ? (ar ? 'غير موصول — أقرب عقدة ' + I.near.name + ' على بعد ' + Math.round(I.dist) + ' م' : 'Not connected — nearest ' + I.near.name + ' at ' + Math.round(I.dist) + ' m') : (ar ? 'غير موصول — لا توجد علبة FDB قريبة' : 'Not connected — no FDB nearby'));
     return ln;
   };

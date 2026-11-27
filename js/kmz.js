@@ -48,6 +48,9 @@
     add(tx('موصل عند الـOLT · منفذ PON ', 'Connector at the OLT · PON ') + r.port, C.connector);
     r.steps.slice().reverse().forEach(s => { if (s.type === 'strand') { const c = FT.state.cables[s.cable]; add(dot(F().strandColor(c, s.f).hex) + '<bdi style="white-space:nowrap">' + esc(c.name) + '</bdi> · ' + ltr(esc(F().strandName(c, s.f))) + ' · ' + ltr(num(s.len) + ' m'), s.len / 1000 * C.att1490); } else if (s.type === 'fusion') add(tx('لحام بـ ', 'Fusion at ') + esc(nm(s.node)), C.fusion); else if (s.type === 'splitter') add(tx('مقسّم ', 'Splitter ') + ltr(s.ratio) + ' · ' + esc(nm(s.node)), F().splitterLoss(s.ratio)); });
     add(tx('مقسّم العلبة ', 'Box splitter ') + ltr(r.splitter.ratio), F().splitterLoss(r.splitter.ratio));
+    if (r.budget.slackM > 0.005) add(tx('احتياط اللفّات والهالك ', 'Cable loops and waste ') + ltr(num(r.budget.slackM) + ' m'), r.budget.slackM / 1000 * C.att1490);
+    if (r.budget.boxConnectors) add(tx('موصلات داخل العلب × ', 'Connectors inside the boxes × ') + ltr(r.budget.boxConnectors), r.budget.boxConnectors * C.connector);
+    if (r.budget.assumedFusions) add(tx('لحامات مقدّرة غير مرسومة × ', 'Assumed splices, not drawn × ') + ltr(r.budget.assumedFusions), r.budget.assumedFusions * C.fusion);
     if (r.budget.dropM) add(tx('كبل المشترك المفترض ', 'Assumed drop ') + ltr(r.budget.dropM + ' m'), r.budget.dropM / 1000 * C.att1490);
     for (let i = 1; i < C.connectors; i++) add(tx('موصل عند المشترك', 'Connector at the subscriber'), C.connector);
     return rows;

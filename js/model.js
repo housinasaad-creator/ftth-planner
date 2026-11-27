@@ -66,7 +66,6 @@
     { id: 'c_e48', name: 'Splice closure IP68 48F', type: 'mh' }, { id: 'c_e96', name: 'Splice closure IP68 96F', type: 'mh' },
   ];
   FT.CASSETTES = ['', 'IP68 24F', 'IP68 48F', 'IP68 96F', 'custom'];
-  FT.BASE_LOSS = { fiber1490: 0.30, fiber1310: 0.40, connector: 0.5, splice: 0.1, txDbm: 3, rxSens: -27 }; // ST maximums: 0.40 dB/km @1310, 0.30 @1550; SC/APC <= 0.5 dB
 
   // ---------------- geometry ----------------
   const R = 6371008.8, rad = Math.PI / 180;
@@ -205,12 +204,14 @@
     Object.values(S.cables).forEach(c => { if (!c.nodes.includes(id)) return; const i = c.nodes.indexOf(id);
       if (chamber && c.shared && c.segs && i > 0 && i < c.nodes.length - 1) { c.segs.splice(i - 1, 2, c.segs[i - 1].concat(c.segs[i].slice(1))); c.nodes.splice(i, 1); } else delete S.cables[c.id]; });
     Object.values(S.splices).forEach(s => { if (s.node === id) delete S.splices[s.id]; });
-    Object.values(S.subs).forEach(s => { if (s.node === id) { delete S.subs[s.id]; Object.values(S.cables).forEach(c => { if (c.sub === s.id) delete S.cables[c.id]; }); } });
+    Object.values(S.subs).forEach(s => { if (s.node === id) { FT.dropSubscriber(s.id); Object.values(S.cables).forEach(c => { if (c.sub === s.id) delete S.cables[c.id]; }); } });
     FT.fiber && FT.fiber.prune();
   };
   FT.deletePipe = id => { delete FT.state.pipes[id]; pipeIdx = null; };
   // a deleted cable takes its joins with it, and a deleted drop takes its subscriber (undo brings all of it back)
-  FT.deleteCable = id => { const c = FT.state.cables[id]; delete FT.state.cables[id]; if (c && c.sub) delete FT.state.subs[c.sub]; FT.fiber && FT.fiber.prune(); };
+  FT.deleteCable = id => { const c = FT.state.cables[id]; delete FT.state.cables[id]; if (c && c.sub) FT.dropSubscriber(c.sub); FT.fiber && FT.fiber.prune(); };
+  // the house of the last removed subscriber is no longer marked as connected
+  FT.dropSubscriber = id => { const S = FT.state, s = S.subs[id]; if (!s) return; delete S.subs[id]; if (s.bld && S.bld[s.bld] && !Object.values(S.subs).some(x => x.bld === s.bld)) delete S.bld[s.bld].st; };
 
   // ---------------- material prices (USD) and automatic costing ----------------
   // Defaults are rough market estimates so the first project is not empty; the user edits them to the real supplier prices.
@@ -230,8 +231,8 @@
     const S = FT.state, P = FT.prices(), inS = (set, id) => !scope || scope[set].has(id), lines = [];
     const add = (kind, name, qty, unit, price) => { if (qty > 0) lines.push({ kind, name, qty, unit, price, total: qty * price }); };
     const cab = {}, pip = {}, nod = {}, spl = {};
-    Object.values(S.cables).filter(c => inS('cables', c.id)).forEach(c => { cab[c.cat] = (cab[c.cat] || 0) + FT.cableLength(c); });
-    let runM = 0; Object.values(S.pipes).filter(p => inS('pipes', p.id)).forEach(p => { const l = FT.pathLen(p.pts); runM += l; pip[p.cat] = (pip[p.cat] || 0) + l * (p.qty || 1); });
+    Object.values(S.cables).filter(c => inS('cables', c.id)).forEach(c => { cab[c.cat] = (cab[c.cat] || 0) + (FT.fiber ? FT.fiber.cableNeed(c) : FT.cableLength(c)); });
+    const spare = 1 + (FT.fiber ? FT.fiber.cfg().waste : 0) / 100; let runM = 0; Object.values(S.pipes).filter(p => inS('pipes', p.id)).forEach(p => { const l = FT.pathLen(p.pts); runM += l; pip[p.cat] = (pip[p.cat] || 0) + l * (p.qty || 1) * spare; });
     Object.values(S.nodes).filter(n => inS('nodes', n.id)).forEach(n => { nod[n.type] = (nod[n.type] || 0) + 1; if (n.ratio) spl[n.ratio] = (spl[n.ratio] || 0) + (n.nsplit || 1); });
     Object.keys(cab).forEach(id => { const c = FT.CABLE_CAT.find(x => x.id === id); add('cable', c ? c.name.split(' loose')[0] : id, cab[id], 'm', P.cable[id] || 0); });
     Object.keys(pip).forEach(id => { const c = FT.PIPE_CAT.find(x => x.id === id); add('pipe', c ? c.name : id, pip[id], 'm', P.pipe[id] || 0); });

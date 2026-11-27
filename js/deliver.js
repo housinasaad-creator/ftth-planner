@@ -112,12 +112,36 @@
   };
 
   // ---------------- LLD: boxes + fibre (core) allocation ----------------
+  // every joint of the network, the side that comes from the exchange first
+  DV.coreRows = function () {
+    const S = FT.state, F = FT.fiber, adj = FT.spec.graph(), trees = Object.values(S.nodes).filter(n => n.type === 'olt').map(o => FT.spec.tree(o.id, adj));
+    const far = id => Math.min(Infinity, ...trees.map(t => t.dist[id] == null ? Infinity : t.dist[id]));
+    const rank = (e, node) => {
+      if (e.o != null) return 0;
+      if (e.s != null) return e.p > 0 ? 1 : 3;
+      if (e.t) return 5;
+      const c = S.cables[e.c], here = far(node); // a cable that leads closer to the exchange is the feeding side
+      return c && (c.nodes || []).some(n => n !== node && far(n) < here) ? 2 : 4;
+    };
+    const side = e => {
+      if (e.o != null) return ['OLT PON port', String(e.o), ''];
+      if (e.t) return ['TERMINATED', '', ''];
+      if (e.s != null) { const sp = F.splitter(e.s); return ['splitter ' + (sp ? sp.ratio : '?') + ' #' + String(e.s).split('#').pop(), e.p ? 'OUT ' + e.p : 'IN', '']; }
+      const c = S.cables[e.c]; return [c ? c.name : '?', c ? F.strandName(c, e.f) : String(e.f), String(e.f)];
+    };
+    const rows = [];
+    Object.values(S.nodes).sort((p, q) => String(p.code || p.name).localeCompare(String(q.code || q.name), undefined, { numeric: true })).forEach(n => {
+      F.links(n.id).map(l => rank(l.a, n.id) <= rank(l.b, n.id) ? [l.a, l.b] : [l.b, l.a]).forEach(([x, y]) => {
+        const i = side(x), o = side(y); rows.push([n.code || n.name, SHORT[n.type], i[0], i[1], i[2], o[0], o[1], o[2]]);
+      });
+    });
+    return [['node', 'node_type', 'from', 'from_core', 'from_core_no', 'to', 'to_core', 'to_core_no']].concat(rows);
+  };
+
   DV.lldFiles = function () {
     const S = FT.state, rows = FT.spec.analyze(), nm = id => (S.nodes[id] || {}).code || (S.nodes[id] || {}).name || '';
     const boxes = [['code', 'name', 'building', 'lat', 'lon', 'splitter', 'from_OLT', 'path_km', 'split_1:N', 'stages', 'loss_dB', 'rx_dBm']].concat(rows.map(r => { const n = r.node; return [n.code, n.name, n.label, n.ll[1].toFixed(6), n.ll[0].toFixed(6), n.ratio, r.fed ? r.olt.name : 'NOT CONNECTED', r.fed ? r.km.toFixed(3) : '', r.fed ? r.split : '', r.fed ? r.stages : '', r.fed ? r.loss.toFixed(2) : '', r.fed ? r.rx.toFixed(1) : '']; }));
-    const cores = [['node', 'node_type', 'cable_in', 'core_in', 'cable_out', 'core_out']];
-    Object.values(S.splices).forEach(sp => { const n = S.nodes[sp.node], ci = S.cables[sp.inCable], co = S.cables[sp.outCable]; if (!n || !ci) return;
-      for (let i = 1; i <= ci.core; i++) { const v = sp.fus[i]; if (!v) continue; const lb = FT.fiberLabel(Math.floor((i - 1) / ci.cpt) + 1, (i - 1) % ci.cpt + 1); cores.push([n.code || n.name, SHORT[n.type], ci.name, lb, v === 'T' ? '' : (co ? co.name : ''), v === 'T' ? 'TERMINATED' : (co ? FT.fiberLabel(Math.floor((+v - 1) / co.cpt) + 1, (+v - 1) % co.cpt + 1) : v)]); } });
+    const cores = DV.coreRows();
     return [{ name: 'LLD_boxes_FDB.csv', bytes: utf8(csv(boxes)) }, { name: 'LLD_core_allocation.csv', bytes: utf8(csv(cores)) }];
   };
   DV.lldCsv = function () { FT.exp.download('ftth_LLD_' + pname() + '_' + stamp() + '.zip', DV.zip(DV.lldFiles())); U().toast('LLD ✓'); };
@@ -178,7 +202,10 @@
     const fed = soc.rows.filter(r => r.fed); if (fed.length) h += '<p>' + (ar() ? 'أسوأ فقد: ' : 'Worst loss: ') + Math.max(...fed.map(r => r.loss)).toFixed(1) + ' dB · ' + (ar() ? 'أسوأ تقسيم: 1:' : 'worst split: 1:') + Math.max(...fed.map(r => r.split)) + '</p>';
     h += '<h2>3 · LLD ' + (ar() ? 'التصميم التفصيلي — العلب' : 'Detailed design — boxes') + '</h2><table><tr><th>' + (ar() ? 'الترميز' : 'Code') + '</th><th>' + (ar() ? 'مبنى' : 'Building') + '</th><th>Lat, Lon</th><th>' + (ar() ? 'مقسّم' : 'Splitter') + '</th><th>km</th><th>1:N</th><th>dB</th></tr>' + soc.rows.map(r => '<tr><td>' + esc(r.node.code || r.node.name) + '</td><td>' + esc(r.node.label || '') + '</td><td>' + r.node.ll[1].toFixed(5) + ', ' + r.node.ll[0].toFixed(5) + '</td><td>' + esc(r.node.ratio || '') + '</td><td>' + (r.fed ? r.km.toFixed(2) : '—') + '</td><td>' + (r.fed ? '1:' + r.split : '—') + '</td><td>' + (r.fed ? r.loss.toFixed(1) : '—') + '</td></tr>').join('') + '</table>';
     h += '<h2>4 · BOM ' + (ar() ? 'جدول الكميات' : 'Bill of materials') + '</h2><table><tr><th>' + T('qty') + '</th><th></th></tr>' + c.lines.map(r => '<tr><td style="white-space:nowrap">' + (r.unit === 'm' ? r.qty.toFixed(1) + ' m' : r.qty) + '</td><td>' + esc(r.name) + '</td></tr>').join('') + '</table>';
-    h += '<h2>5 · ' + (ar() ? 'ملاحظات وافتراضات' : 'Notes and assumptions') + '</h2><ul><li>' + (ar() ? 'الفقد = ألياف 0.30 dB/كم + موصلات SC/APC 0.5 dB + وصلات 0.1 dB + أقصى فقد للمقسّمات (1:2 = 4.0، 1:4 = 7.3، 1:8 = 10.7، 1:16 = 14.0 dB) + 100 م كبل مشترك.' : 'Loss = fibre 0.30 dB/km + SC/APC connectors 0.5 dB + splices 0.1 dB + maximum splitter loss (1:2 = 4.0, 1:4 = 7.3, 1:8 = 10.7, 1:16 = 14.0 dB) + 100 m of drop.') + '</li><li>' + (ar() ? 'مسارات الكبلات من تخطيط على الخريطة ولم تُقِس موقعيًا؛ المخرجات النهائية (As-Built، OTDR، UDM) تُسلَّم بعد التنفيذ.' : 'Routes come from planning on the map, not from a site survey; final deliverables (As-Built, OTDR, UDM) are produced after construction.') + '</li></ul>';
+    const C = FT.fiber.cfg(), loss = ['1:2', '1:4', '1:8', '1:16'].map(r => r + ' = ' + FT.fiber.splitterLoss(r)).join(ar() ? '، ' : ', ');
+    h += '<h2>5 · ' + (ar() ? 'ملاحظات وافتراضات' : 'Notes and assumptions') + '</h2><ul><li>' + (ar()
+      ? 'الفقد = ألياف ' + C.att1490 + ' dB/كم نزولاً و ' + C.att1310 + ' صعوداً (يُعتمد الاتجاه الأسوأ) + موصلات SC/APC ' + C.connector + ' dB (' + C.connectors + ' في الطرفين و ' + C.boxConn + ' داخل كل علبة) + لحامات ' + C.fusion + ' dB (' + C.boxSplice + ' بكل علبة و ' + C.holeSplice + ' بكل منهل أو غرفة، أو العدد المرسوم إن كان أكبر) + المقسّمات (' + loss + ' dB) + ' + C.dropM + ' م كبل مشترك مفترض إن لم يكن مرسوماً. طول الليف = المسار المرسوم + ' + C.waste + '% هالك + ' + C.slackEnd + ' م لفّة عند طرفي كل كبل + ' + C.slackHole + ' م بكل غرفة، وكميات الكابلات في جدول الكميات تشمل هذا الاحتياط. قدرة إرسال OLT المعتمدة ' + C.oltTx + ' dBm. (قيم تخطيطية يجب تأكيدها.)'
+      : 'Loss = fibre ' + C.att1490 + ' dB/km down and ' + C.att1310 + ' up (the worse direction counts) + SC/APC connectors ' + C.connector + ' dB (' + C.connectors + ' at the ends and ' + C.boxConn + ' in every box) + splices ' + C.fusion + ' dB (' + C.boxSplice + ' per box and ' + C.holeSplice + ' per manhole or handhole, or the drawn number when higher) + splitters (' + loss + ' dB) + ' + C.dropM + ' m of assumed drop when none is drawn. Fibre length = drawn route + ' + C.waste + '% waste + ' + C.slackEnd + ' m loop at both ends of every cable + ' + C.slackHole + ' m per chamber; the cable quantities include this. OLT transmit power used: ' + C.oltTx + ' dBm. (Planning values to be confirmed.)') + '</li><li>' + (ar() ? 'مسارات الكبلات من تخطيط على الخريطة ولم تُقِس موقعيًا؛ المخرجات النهائية (As-Built، OTDR، UDM) تُسلَّم بعد التنفيذ.' : 'Routes come from planning on the map, not from a site survey; final deliverables (As-Built, OTDR, UDM) are produced after construction.') + '</li></ul>';
     openHtml('Delivery pack', h);
   };
 })(window);
