@@ -76,12 +76,9 @@
     const set = (n, v) => { const m = document.querySelector('meta[name=' + n + ']'); if (m) m.content = v; };
     set('color-scheme', 'only ' + th); set('supported-color-schemes', 'only ' + th); set('theme-color', th === 'light' ? '#ffffff' : '#07090d'); UI.themeButtons(); if (FT.map && FT.map.applyTheme) FT.map.applyTheme();
   };
-  UI.openLearn = function () { // tutorial videos will live here
-    const ar = FT.lang === 'ar';
-    UI.modal(ar ? 'تعليمي' : 'Tutorials', '<div id="learnBox"><p class="d">' + (ar ? 'الفيديوهات التعليمية للأداة بتنضاف هون قريباً.' : 'Tutorial videos for the planner will be added here soon.') + '</p></div>', [{ label: t('close') }]);
-  };
+  UI.openLearn = () => FT.hub.open('home'); // three cards: videos, tips, interactive training (js/hub.js)
   UI.themeButtons = function () {
-    const ar = FT.lang === 'ar', learn = $('#bLearn'); if (learn) { learn.querySelector('span').textContent = ar ? 'تعليمي' : 'Tutorials'; learn.onclick = () => UI.openLearn(); }
+    const ar = FT.lang === 'ar', learn = $('#bLearn'); if (learn) { learn.querySelector('span').textContent = ar ? 'تعليمي' : 'Tutorials'; learn.title = ar ? 'فيديوهات الشرح والتلميحات والتدريب التفاعلي' : 'Videos, tips and interactive training'; learn.onclick = () => UI.openLearn(); }
     $$('#themeSw button').forEach(b => { const v = b.dataset.th; b.classList.toggle('on', v === UI.theme()); b.querySelector('span').textContent = v === 'dark' ? (ar ? 'غامق' : 'Dark') : (ar ? 'فاتح' : 'Light'); b.dataset.tip = v === 'dark' ? (ar ? 'الوضع الغامق' : 'Dark mode') : (ar ? 'الوضع الفاتح' : 'Light mode'); b.dataset.desc = ar ? 'يغيّر شكل الأداة فقط، ولا يتأثر بوضع المتصفح أو الجهاز.' : 'Changes this planner only; the browser or computer mode never affects it.'; b.dataset.key = 'Shift+V'; b.onclick = () => UI.setTheme(v); });
   };
   UI.coord = s => { $('#stCoord').textContent = s; }; UI.zoom = z => { $('#stZoom').textContent = 'z' + z.toFixed(1); };
@@ -424,10 +421,10 @@
       root.querySelector('#ioReset').onclick = async () => { if (await UI.confirmBox(t('io_confirm'), true)) { FT.commit(); FT.setState(Object.assign(FT.blank(), { meta: FT.state.meta })); UI.closeModal(); } };
     });
   };
-  UI.openHelp = function () { // every shortcut, grouped
-    const body = '<div class="sc">' + FT.keys.helpRows().map(([title, rows]) => '<section><h4>' + esc(title) + '</h4><table class="t">' + rows.map(([k, l]) => '<tr><td><kbd class="k">' + esc(k) + '</kbd></td><td>' + esc(l) + '</td></tr>').join('') + '</table></section>').join('') + '</div><p class="d">' + (FT.lang === 'ar' ? 'الاختصارات تعمل بلوحة المفاتيح العربية والإنكليزية. مرّر الماوس فوق أي زر ليظهر اختصاره.' : 'Shortcuts work with an Arabic or English layout. Hover any button to see its shortcut.') + '</p>';
-    UI.modal(t('help_title'), body, [{ label: t('close') }]);
+  UI.helpBody = function () { // every shortcut, grouped
+    return '<div class="sc">' + FT.keys.helpRows().map(([title, rows]) => '<section><h4>' + esc(title) + '</h4><table class="t">' + rows.map(([k, l]) => '<tr><td><kbd class="k">' + esc(k) + '</kbd></td><td>' + esc(l) + '</td></tr>').join('') + '</table></section>').join('') + '</div><p class="d">' + (FT.lang === 'ar' ? 'الاختصارات تعمل بلوحة المفاتيح العربية والإنكليزية. مرّر الماوس فوق أي زر ليظهر اختصاره.' : 'Shortcuts work with an Arabic or English layout. Hover any button to see its shortcut.') + '</p>';
   };
+  UI.openHelp = () => FT.hub.open('tips'); // the ? and F1 keys go straight to the tips card
   UI.openProjects = async function (first) {
     const list = await FT.store.list(), types = [['gpon', 'GPON', 'ألياف (سلكي)'], ['wireless', 'Wireless', 'لاسلكي'], ['mixed', 'Mixed', 'مختلط']];
     const ic = { gpon: '🔌', wireless: '📡', mixed: '🔀' };
@@ -523,7 +520,7 @@
   // ---------------- static wiring / boot ----------------
   UI.applyLang = function () {
     UI.themeButtons(); document.documentElement.lang = FT.lang; $('#brand').title = t('projects'); $('#layersTitle').textContent = t('layers'); $('#lsearch').placeholder = t('layers_search');
-    $('#bUndo').title = t('undo'); $('#bRedo').title = t('redo'); $('#bHelp').title = t('help'); $('#bLang').textContent = FT.lang === 'ar' ? 'EN' : 'عربي'; $('#bShare').textContent = t('share'); UI.priceBtn(); $('#bUser').textContent = FT.sb && FT.sb.user ? FT.sb.user.email.split('@')[0] : t('signin');
+    $('#bUndo').title = t('undo'); $('#bRedo').title = t('redo'); $('#bLang').textContent = FT.lang === 'ar' ? 'EN' : 'عربي'; $('#bShare').textContent = t('share'); UI.priceBtn(); $('#bUser').textContent = FT.sb && FT.sb.user ? FT.sb.user.email.split('@')[0] : t('signin');
     $('#bNewFolder').title = t('new_folder'); $('#bCollapse').title = t('collapse'); $('#bLockAll').title = t('lock_all');
     $$('.tabs button[data-tab]').forEach(b => b.textContent = t('tab_' + (b.dataset.tab === 'tool' ? 'tool' : b.dataset.tab === 'props' ? 'props' : 'analysis')));
     $('#basemap .cap').textContent = t('basemap'); $('#basemap .bm').innerHTML = [['map', 'b_map'], ['3d', 'b_3d'], ['sat', 'b_sat']].map(([k, l]) => '<button data-b="' + k + '" class="' + ((FT.map.base || 'map') === k ? 'on' : '') + '">' + t(l) + '</button>').join(''); $('#basemap .bm').innerHTML += '<button id="bHideNet" class="' + (FT.map.netHidden ? 'on' : '') + '" title="' + t('b_hidenet') + '">👁 ' + t('b_hidenet') + '</button><button id="bHideHouses" class="' + (FT.map.hideHouses ? 'on' : '') + '" title="' + t('b_hidehouses') + '">👁 ' + t('b_hidehouses') + '</button>'; { $('#basemap .bm').innerHTML += '<button id="bHideBld" class="' + (FT.map.hideBld ? 'on' : '') + '" title="' + t('b_hide') + '">👁 ' + t('b_hide') + '</button>'; $('#bHideBld').onclick = () => { FT.map.setBldHidden(!FT.map.hideBld); UI.applyLang(); }; }
@@ -538,7 +535,7 @@
     if (window.__PHONE) return;
     document.body.classList.add('nop'); UI.applyLang(); await FT.map.init('map'); FT.T.init(); UI.applyLang();
     $('#brand').onclick = () => UI.openProjects(); $('#projName').onclick = () => UI.openProjects();
-    $('#bUndo').onclick = () => FT.undo(); $('#bRedo').onclick = () => FT.redo(); $('#bHelp').onclick = UI.openHelp; $('#bLang').onclick = () => { FT.setLang(FT.lang === 'ar' ? 'en' : 'ar'); UI.applyLang(); UI.buildTabs((FT.state.meta && FT.state.meta.type) || 'gpon'); UI.buildToolbar(); };
+    $('#bUndo').onclick = () => FT.undo(); $('#bRedo').onclick = () => FT.redo(); $('#bLang').onclick = () => { FT.setLang(FT.lang === 'ar' ? 'en' : 'ar'); UI.applyLang(); UI.buildTabs((FT.state.meta && FT.state.meta.type) || 'gpon'); UI.buildToolbar(); };
     $('#bShare').onclick = UI.openShare; $('#bPrices').onclick = () => UI.openPrices(); $('#bUser').onclick = () => UI.toast('Sign-in — after Supabase connection');
     $('#showLeft').onclick = UI.toggleLeft; $('#showRight').onclick = UI.toggleRight; $('#bLayersX').onclick = UI.toggleLeft; $('#bRightX').onclick = UI.toggleRight; $('#bLay').onclick = UI.toggleLeft; $('#bPan').onclick = UI.toggleRight;
     $('#bNewFolder').onclick = UI.newFolder; $('#bCollapse').onclick = () => { collapsed = collapsed.has('root') ? new Set() : new Set(['root', ...NODE_ORDER.map(x => 'nodes:' + x), 'pipes', 'cables', 'splices', 'imports', ...Object.keys(FT.state.folders || {})]); UI.refreshTree(); };
@@ -550,6 +547,7 @@
     $$('.tabs button[data-tab]').forEach(b => b.onclick = () => UI.tab(b.dataset.tab));
     wireSearch(); FT.map.map.on('moveend', () => FT.imp && FT.imp.renderHandles()); FT.onChange(why => { if (FT.bedit) FT.bedit.refresh(); if (why !== 'move') UI.refreshTreeSoon(); UI.renderPanelKeep(); $('#bUndo').disabled = !FT.canUndo(); $('#bRedo').disabled = !FT.canRedo(); });
     $('#bUndo').disabled = true; $('#bRedo').disabled = true; UI.tab('tool');
+    if (FT.train && FT.train.on) { await FT.train.start(); return; } // ?train=1: the sealed training project, no real project is opened
     if (await FT.store.openFromUrl()) UI.afterProject(); else { const last = localStorage.getItem('ft2_last'); if (last && await FT.store.open(last)) UI.afterProject(); else UI.openProjects(true); }
   };
   UI.renderPanelKeep = function () { if (document.activeElement && /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName) && $('#rbody').contains(document.activeElement)) return; UI.renderPanel(); };

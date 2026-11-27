@@ -50,7 +50,7 @@
   T.bsel = new Set(); // selected buildings (Shift+click adds)
   T.clearBuildingSel = () => { T.bsel = new Set(); };
   T.select = function (kind, id) {
-    T.sel = kind ? { kind, id } : null; if (kind) T.multi = null;
+    T.sel = kind ? { kind, id } : null; T.multi = null; // clearing the selection must clear a multi-selection too, or Delete would still remove it unseen
     FT.map.setMulti(null); FT.map.setDone(null);
     if (kind === 'bld') T.bsel = new Set([id]); else T.bsel = new Set();
     FT.map.setSelection(kind, id); FT.map.setBuildingSelection(new Set(T.bsel));
@@ -73,7 +73,7 @@
   T.nodeNear = nodeNear;
   function hit(e) {
     const b = [[e.point.x - 6, e.point.y - 6], [e.point.x + 6, e.point.y + 6]];
-    const f = map.queryRenderedFeatures(b, { layers: ['wdev', 'wl-line', 'm3d', 'nodes', 'spl-icon', 'house', 'house-num', 'cables', 'pipes'].filter(l => map.getLayer(l)) });
+    const f = map.queryRenderedFeatures(b, { layers: ['wdev', 'wl-line', 'm3d', 'nodes', 'spl-lab', 'house', 'house-num', 'cables', 'pipes'].filter(l => map.getLayer(l)) });
     const pick = ly => f.find(x => x.layer.id === ly);
     const wd = pick('wdev'); if (wd) return { kind: 'wdev', id: wd.properties.id };
     const wl = pick('wl-line'); if (wl) return { kind: 'wlink', id: wl.properties.id };
@@ -85,7 +85,7 @@
     const onHouse = under.find(x => x.layer.id === 'house' || x.layer.id === 'house-num'); if (onHouse) return { kind: 'bld', id: onHouse.properties.id };
     const nd = pick('nodes'); if (nd) return nodeHit(nd);
     const hm = pick('house') || pick('house-num'); if (hm) return { kind: 'bld', id: hm.properties.id };
-    const badge = pick('spl-icon'); if (badge) return { kind: 'node', id: badge.properties.id };
+    const badge = pick('spl-lab'); if (badge) return { kind: 'node', id: badge.properties.id };
     const cb = pick('cables'), pp = pick('pipes');
     if (cb && pp) { // pipe first, click again on the same spot -> cable
       if (T.sel && T.sel.kind === 'pipe' && T.sel.id === pp.properties.id) return { kind: 'cable', id: cb.properties.id };
@@ -130,7 +130,8 @@
 
   function addDrawPoint(p, nodeId) {
     const d = T.draw; const last = d.pts[d.pts.length - 1];
-    if (last && FT.dist(last, p) < 0.3) return false; // duplicate (dbl-click)
+    if (last && FT.dist(last, p) < 0.3) { // duplicate (dbl-click). A street corner added by the route can sit exactly under the element: the element takes that point
+      const i = d.pts.length - 1; if (nodeId && !d.nodes[i]) { d.nodes[i] = nodeId; d.pts[i] = p; return true; } return false; }
     d.pts.push(p); d.nodes.push(nodeId || null); return true;
   }
 
@@ -237,6 +238,7 @@
     if (h && h.kind === 'bld' && !(FT.store && FT.store.mode === 'view')) { const hs = map.queryRenderedFeatures([[e.point.x - 3, e.point.y - 3], [e.point.x + 3, e.point.y + 3]], { layers: ['house', 'm3d'] }).filter(f => f.layer.id === 'house' || f.properties.kind === 'house'); if (hs.length) { const id = hs[0].properties.id || hs[0].properties.mid, mpp = 156543.03 * Math.cos(map.getCenter().lat * Math.PI / 180) / Math.pow(2, map.getZoom()); if (mpp * 100 > T.MOVE_MAX_M && T.sel && T.sel.kind === 'bld' && hs.some(f => (f.properties.id || f.properties.mid) === T.sel.id) && Date.now() - (T._mvToast || 0) > 4000) { T._mvToast = Date.now(); U().toast(FT.t('house_move_zoom')); }
       if (mpp * 100 <= T.MOVE_MAX_M && !T.locked.has(id)) { dragging = { house: id, from: FT.map.housePoint(id).slice(), start: ll(e), moved: false }; map.dragPan.disable(); return; } } }
     if (!h || h.kind !== 'node') return;
+    if (e.originalEvent.shiftKey) return; // Shift+click builds a multi-selection
     if (T.locked.has(h.id)) return;
     /* A dense network covers the whole screen: grabbing the first element under the cursor made it impossible to pan the map (and moved elements by accident).
        An element is grabbed at once only when it is already selected, part of the selection, or the map is zoomed in; otherwise the drag pans the map (click it first, then drag). */

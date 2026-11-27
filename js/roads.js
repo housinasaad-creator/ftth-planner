@@ -55,7 +55,7 @@
   }
   // plain copy of what the worker needs (street lines + building rings)
   R.snapshot = function () {
-    const m = FT.map.map, lines = (m.querySourceFeatures('openmaptiles', { sourceLayer: 'transportation' }) || []).filter(f => f.geometry && !SKIP[f.properties.class] && (f.geometry.type === 'LineString' || f.geometry.type === 'MultiLineString')).map(f => ({ geometry: { type: f.geometry.type, coordinates: f.geometry.coordinates }, properties: { class: f.properties.class } }));
+    const m = FT.map.map, lines = (R._lines || m.querySourceFeatures('openmaptiles', { sourceLayer: 'transportation' }) || []).filter(f => f.geometry && !SKIP[f.properties.class] && (f.geometry.type === 'LineString' || f.geometry.type === 'MultiLineString')).map(f => ({ geometry: { type: f.geometry.type, coordinates: f.geometry.coordinates }, properties: { class: f.properties.class } }));
     const blds = ((FT.map && FT.map.bldFeats) || []).map(f => ({ geometry: { coordinates: [f.geometry.coordinates[0]] }, properties: { id: f.properties.id } }));
     return { lines, blds, on: R.on };
   };

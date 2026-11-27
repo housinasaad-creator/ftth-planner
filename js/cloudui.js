@@ -100,7 +100,7 @@
   C.button = function () {
     const share = $('#bShare'); if (!share) return;
     let b = $('#bCloud'); if (!b) { b = document.createElement('button'); b.id = 'bCloud'; b.className = 'pill'; share.parentNode.insertBefore(b, share); b.onclick = () => C.open(); }
-    const s = C.state(); b.style.display = s === 'none' || s === 'local' || s === 'view' ? 'none' : ''; // a local-only project has its own "upload" badge in this place
+    const s = G.FT_TRAIN ? 'saved' : C.state(); /* training shows the button so a lesson can explain it; clicks are blocked there */ b.style.display = s === 'none' || s === 'local' || s === 'view' ? 'none' : ''; // a local-only project has its own "upload" badge in this place
     if (b.dataset.s !== s + FT.lang) { b.dataset.s = s + FT.lang; b.innerHTML = '<i class="cl-dot ' + s + '"></i>☁ <span class="cl-lab">' + tx('رفع للسيرفر', 'Upload to server') + '</span>'; b.title = { saved: tx('كل التعديلات المرسلة وصلت. اضغط للتأكيد والمشاركة.', 'Changes are on the server. Click to confirm and share.'), sending: tx('في تعديلات عم تنبعت…', 'Sending changes…'), offline: tx('ما في اتصال بالسيرفر', 'No connection to the server') }[s] || ''; }
   };
   setInterval(() => { try { C.button(); } catch (e) { } }, 1200);
